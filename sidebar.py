@@ -19,7 +19,7 @@ from conversation_store import ConversationStore, ConversationEntry
 
 
 SIDEBAR_WIDTH = 240
-CARD_HEIGHT = 64
+CARD_HEIGHT = 56
 AVATAR_SIZE = 40
 BADGE_SIZE = 10
 
@@ -71,10 +71,12 @@ class ConversationCard(QFrame):
     clicked = pyqtSignal(str)
     rightClicked = pyqtSignal(str, object)
 
-    def __init__(self, entry: ConversationEntry, foamo_icon: QIcon, parent=None):
+    def __init__(self, entry: ConversationEntry, foamo_icon: QIcon,
+                 theme_mgr=None, parent=None):
         super().__init__(parent)
         self.entry = entry
-        self.setFixedHeight(CARD_HEIGHT)
+        self.theme_mgr = theme_mgr
+        self.setFixedHeight(56)
         self.setMouseTracking(True)
         self._selected = False
         self._hover = False
@@ -83,19 +85,53 @@ class ConversationCard(QFrame):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(40)
+        if theme_mgr is not None:
+            theme_mgr.theme_changed.connect(lambda _n: self.update())
 
     def _build(self, foamo_icon: QIcon):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 12, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(16, 8, 12, 8)
+        layout.setSpacing(10)
         self.avatar = AvatarWidget(self.entry, foamo_icon)
         layout.addWidget(self.avatar)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+        text_col.setContentsMargins(0, 0, 0, 0)
+
         self.label = QLabel(self.entry.name)
         f = self.label.font()
         f.setPointSize(10)
         f.setWeight(QFont.Weight.Medium)
         self.label.setFont(f)
-        layout.addWidget(self.label, 1)
+        text_col.addWidget(self.label)
+
+        self.sub_label = QLabel(self._format_sub())
+        sf = self.sub_label.font()
+        sf.setPointSize(8)
+        self.sub_label.setFont(sf)
+        self.sub_label.setStyleSheet("color: #9a9387;")
+        text_col.addWidget(self.sub_label)
+
+        layout.addLayout(text_col, 1)
+
+    def _format_sub(self) -> str:
+        if self.entry.kind == "chat":
+            return "·_·  和泡沫聊点什么"
+        import time as _t
+        ts = self.entry.last_active_ts
+        if not ts:
+            return self.entry.path or ""
+        diff = _t.time() - ts
+        if diff < 60:
+            return "刚刚"
+        if diff < 3600:
+            return f"{int(diff // 60)} 分钟前"
+        if diff < 86400:
+            return f"{int(diff // 3600)} 小时前"
+        if diff < 86400 * 7:
+            return f"{int(diff // 86400)} 天前"
+        return "更早"
 
     def set_selected(self, sel: bool):
         if self._selected != sel:
@@ -107,6 +143,7 @@ class ConversationCard(QFrame):
 
     def refresh(self):
         self.label.setText(self.entry.name)
+        self.sub_label.setText(self._format_sub())
         self.update()
 
     def enterEvent(self, _ev):
@@ -135,11 +172,15 @@ class ConversationCard(QFrame):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
+        pal = self.theme_mgr.palette if self.theme_mgr else {
+            "accent": "#7fb993", "paper": "#fafaf6",
+        }
         if self._selected:
-            p.fillRect(rect, QColor(194, 65, 12, 26))
-            bar_h = int(rect.height() * 0.8)
+            # white-ish bg + 3px left accent bar
+            p.fillRect(rect, QColor(pal.get("paper", "#fff")))
+            bar_h = int(rect.height() * 0.7)
             bar_y = (rect.height() - bar_h) // 2
-            p.setBrush(QColor("#c2410c"))
+            p.setBrush(QColor(pal["accent"]))
             p.setPen(Qt.PenStyle.NoPen)
             p.drawRoundedRect(QRectF(0, bar_y, 3, bar_h), 1.5, 1.5)
         elif self._hover:
@@ -351,21 +392,32 @@ class Sidebar(QWidget):
     delete_project_requested = pyqtSignal(str)
     edit_project_requested = pyqtSignal(str)
 
-    def __init__(self, store: ConversationStore, foamo_icon: QIcon, parent=None):
+    def __init__(self, store: ConversationStore, foamo_icon: QIcon,
+                 theme_mgr=None, parent=None):
         super().__init__(parent)
         self.store = store
         self.foamo_icon = foamo_icon
+        self.theme_mgr = theme_mgr
         self._cards: dict[str, ConversationCard] = {}
         self._current_key = "chat"
         self.setFixedWidth(SIDEBAR_WIDTH)
-        self.setStyleSheet(
-            "Sidebar { background: rgba(247, 247, 248, 0.72); }"
-        )
+        self._apply_theme()
+        if theme_mgr is not None:
+            theme_mgr.theme_changed.connect(self._apply_theme)
         self._build()
         store.entry_added.connect(self._rebuild)
         store.entry_removed.connect(self._rebuild)
         store.entry_changed.connect(self._on_entry_changed)
         self._rebuild()
+
+    def _apply_theme(self, *_args):
+        if self.theme_mgr is None:
+            # default warm
+            self.setStyleSheet("Sidebar { background: #f3efe6; }")
+            return
+        p = self.theme_mgr.palette
+        bg = p.get("paperWarm") or p.get("glass1") or "#f3efe6"
+        self.setStyleSheet(f"Sidebar {{ background: {bg}; }}")
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -397,6 +449,20 @@ class Sidebar(QWidget):
         self.card_area.setContentsMargins(0, 4, 0, 0)
         layout.addLayout(self.card_area)
         layout.addStretch(1)
+        # Footer (Task VR5): settings button
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 4, 0, 0)
+        self.settings_btn = QPushButton("⚙  设置")
+        self.settings_btn.setFixedHeight(32)
+        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; "
+            "text-align: left; padding: 0 10px; font-size: 11pt; color: #1d1b16; }"
+            "QPushButton:hover { background: rgba(0,0,0,0.04); border-radius: 8px; }"
+        )
+        footer_row.addWidget(self.settings_btn)
+        footer_row.addStretch(1)
+        layout.addLayout(footer_row)
 
     def _rebuild(self, *_args):
         for c in list(self._cards.values()):
@@ -411,7 +477,7 @@ class Sidebar(QWidget):
                 w.deleteLater()
         entries = self.store.list_entries()
         for i, entry in enumerate(entries):
-            card = ConversationCard(entry, self.foamo_icon)
+            card = ConversationCard(entry, self.foamo_icon, theme_mgr=self.theme_mgr)
             card.clicked.connect(self.card_clicked.emit)
             card.rightClicked.connect(self._on_right_click)
             card.set_selected(entry.key == self._current_key)

@@ -2972,7 +2972,8 @@ class ChatWindow(QWidget):
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
 
-        self.sidebar = Sidebar(self.store, self.foamo_icon, self)
+        self.sidebar = Sidebar(self.store, self.foamo_icon,
+                               theme_mgr=self.theme_mgr, parent=self)
         self.sidebar.setFixedWidth(240)
         self.sidebar.card_clicked.connect(self._switch_to)
         self.sidebar.add_project_requested.connect(self._show_add_dialog)

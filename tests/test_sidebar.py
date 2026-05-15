@@ -62,3 +62,25 @@ def test_set_current_updates_selection(tmp_path, qapp, qtbot):
     sb.set_current(e.key)
     assert sb._cards[e.key]._selected
     assert not sb._cards["chat"]._selected
+
+
+def test_sidebar_settings_button_present(tmp_path, qapp, qtbot):
+    store = ConversationStore(state_dir=tmp_path)
+    sb = Sidebar(store, QIcon())
+    qtbot.addWidget(sb)
+    assert hasattr(sb, "settings_btn")
+    assert "设置" in sb.settings_btn.text()
+
+
+def test_card_subtitle_renders(tmp_path, qapp, qtbot):
+    store = ConversationStore(state_dir=tmp_path)
+    p = tmp_path / "demo"; p.mkdir()
+    store.add_project(str(p), "demo", "DEM", "#7fb993")
+    sb = Sidebar(store, QIcon())
+    qtbot.addWidget(sb)
+    # find the demo card
+    demo_key = [k for k in sb._cards if k != "chat"][0]
+    card = sb._cards[demo_key]
+    # sub_label should exist and have non-empty text (either path or relative time)
+    assert hasattr(card, "sub_label")
+    assert card.sub_label.text()  # non-empty
