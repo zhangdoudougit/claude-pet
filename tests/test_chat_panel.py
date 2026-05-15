@@ -84,8 +84,7 @@ def test_panel_assistant_done_persists_history(tmp_path, qapp, qtbot):
 def test_panel_has_redesigned_header(tmp_path, qapp, qtbot):
     from conversation_store import ConversationStore
     from claude_worker import ClaudeWorker
-    from chat_panel import ConversationPanel
-    from pet_avatar import PetAvatar
+    from chat_panel import ConversationPanel, ChatAvatar
     from status_pill import StatusPill
     store = ConversationStore(state_dir=tmp_path)
     entry = store.get("chat")
@@ -94,7 +93,8 @@ def test_panel_has_redesigned_header(tmp_path, qapp, qtbot):
     worker = ClaudeWorker("chat", conv_dir, "claude", str(tmp_path))
     panel = ConversationPanel(entry, store, worker)
     qtbot.addWidget(panel)
-    assert isinstance(panel.header_avatar, PetAvatar)
+    # 用户 feedback: 闲聊头像必须是 foamo.ico 小丸子, 由 ChatAvatar 渲染
+    assert isinstance(panel.header_avatar, ChatAvatar)
     assert isinstance(panel.status_pill, StatusPill)
     assert panel.mood_line.text().startswith("正在和你")
 

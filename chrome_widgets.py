@@ -15,32 +15,35 @@ CHROME_HEIGHT = 32
 
 
 def _draw_moon(p: QPainter, r, color: QColor):
-    p.setPen(QPen(color, 1.6))
-    p.setBrush(Qt.BrushStyle.NoBrush)
+    # 月牙 = 大圆 - 偏移小圆 (QPainterPath.subtracted)
     cx = r.center().x()
     cy = r.center().y()
-    path = QPainterPath()
-    path.moveTo(cx + 4, cy - 7)
-    path.arcTo(cx - 7.0, cy - 7.0, 14.0, 14.0, 90, -300)
-    path.arcTo(cx - 3.0, cy - 7.0, 14.0, 14.0, 150, 240)
-    path.closeSubpath()
-    p.drawPath(path)
+    big = QPainterPath()
+    big.addEllipse(QRectF(cx - 6.5, cy - 7.0, 13.0, 13.0))
+    small = QPainterPath()
+    # 小圆偏右上, 咬掉一块 → 月牙
+    small.addEllipse(QRectF(cx - 2.5, cy - 9.0, 13.0, 13.0))
+    moon = big.subtracted(small)
+    p.setBrush(color)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawPath(moon)
 
 
 def _draw_sun(p: QPainter, r, color: QColor):
-    pen = QPen(color, 1.6)
+    pen = QPen(color, 1.4)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
     cx = r.center().x()
     cy = r.center().y()
-    p.drawEllipse(cx - 4, cy - 4, 8, 8)
+    p.drawEllipse(QRectF(cx - 3.5, cy - 3.5, 7.0, 7.0))
     for i in range(8):
         a = i * math.pi / 4
-        x1 = cx + 6 * math.cos(a)
-        y1 = cy + 6 * math.sin(a)
-        x2 = cx + 9 * math.cos(a)
-        y2 = cy + 9 * math.sin(a)
-        p.drawLine(int(x1), int(y1), int(x2), int(y2))
+        x1 = cx + 5.5 * math.cos(a)
+        y1 = cy + 5.5 * math.sin(a)
+        x2 = cx + 8.5 * math.cos(a)
+        y2 = cy + 8.5 * math.sin(a)
+        p.drawLine(int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2)))
 
 
 def _draw_minimize(p: QPainter, r, color: QColor):

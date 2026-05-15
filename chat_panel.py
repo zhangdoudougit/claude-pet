@@ -10,8 +10,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QSize
+from PyQt6.QtGui import QFont, QPainter, QPainterPath, QIcon
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame,
@@ -19,8 +19,63 @@ from PyQt6.QtWidgets import (
 
 from conversation_store import ConversationStore, ConversationEntry
 from claude_worker import ClaudeWorker
-from pet_avatar import PetAvatar
 from status_pill import StatusPill
+
+
+# ---------------------------------------------------------------------------
+# ChatAvatar — 圆形头像 widget
+# 闲聊 (chat) 用 foamo.ico (小丸子); 项目用 ProjectBadge.
+# 用户 feedback: 闲聊永远是小丸子, 不用 PetAvatar 替代.
+# 保留 set_mood / set_dark 这两个 API 是为了不破坏现有 caller, 实际 no-op.
+# ---------------------------------------------------------------------------
+
+class ChatAvatar(QWidget):
+    """单图头像 widget. 闲聊渲染圆形 foamo.ico; 项目渲染圆角方块 + 简码."""
+
+    def __init__(self, entry: ConversationEntry, foamo_icon: QIcon,
+                 size: int = 32, parent=None):
+        super().__init__(parent)
+        self.entry = entry
+        self.foamo_icon = foamo_icon
+        self.setFixedSize(size, size)
+        self._size = size
+
+    # API compat with old PetAvatar — silent no-op
+    def set_mood(self, _mood: str):
+        return
+
+    def set_dark(self, _dark: bool):
+        return
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        s = self._size
+        rect = QRectF(0, 0, s, s)
+        if self.entry is not None and self.entry.kind == "project":
+            from PyQt6.QtGui import QColor
+            p.setBrush(QColor(self.entry.color or "#7C8290"))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(rect, 10, 10)
+            f = QFont()
+            f.setPointSize(max(9, int(s * 0.35)))
+            f.setWeight(QFont.Weight.DemiBold)
+            f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.3)
+            p.setFont(f)
+            p.setPen(QColor(255, 255, 255, 242))
+            code = (self.entry.short_code or "")[:4]
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, code)
+            return
+        # chat: 圆形 foamo.ico
+        path = QPainterPath()
+        path.addEllipse(rect)
+        p.setClipPath(path)
+        if self.foamo_icon and not self.foamo_icon.isNull():
+            pm = self.foamo_icon.pixmap(QSize(s, s))
+            p.drawPixmap(rect.toRect(), pm)
+        else:
+            from PyQt6.QtGui import QColor
+            p.fillRect(rect, QColor("#E07A5F"))
 
 # Reuse helpers from existing chat_window — DO NOT redefine them here
 from chat_window import (
@@ -54,6 +109,11 @@ class ConversationPanel(QWidget):
         self._tool_chips: dict[str, ToolChip] = {}
         self._tool_index_to_chip: dict[int, ToolChip] = {}
 
+        # foamo.ico 头像 (chat 类型用)
+        from pathlib import Path as _Path
+        _icon_path = _Path(__file__).parent / "foamo.ico"
+        self._foamo_icon = QIcon(str(_icon_path)) if _icon_path.exists() else QIcon()
+
         self._build_ui()
         self._wire_worker()
         self._load_history()
@@ -73,7 +133,7 @@ class ConversationPanel(QWidget):
         hlay.setContentsMargins(22, 14, 22, 14)
         hlay.setSpacing(12)
 
-        self.header_avatar = PetAvatar(size=32, mood="idle")
+        self.header_avatar = ChatAvatar(self.entry, self._foamo_icon, size=36)
         hlay.addWidget(self.header_avatar)
 
         title_col = QVBoxLayout()
@@ -327,6 +387,18 @@ class ConversationPanel(QWidget):
         # Title label
         if hasattr(self, "title_label"):
             self.title_label.setStyleSheet("color: #1d1b16;")
+        # 气泡 (传 legacy THEMES["light"] 进每个 Bubble 重渲染)
+        self._reapply_bubble_theme("light")
+
+    def _reapply_bubble_theme(self, legacy_name: str):
+        """让所有 Bubble 切 legacy theme name (light / dark) 来跟随 warm / glass."""
+        from chat_window import THEMES
+        colors = THEMES.get(legacy_name, THEMES["light"])
+        for bubble in self.findChildren(Bubble):
+            try:
+                bubble.apply_theme(colors, legacy_name)
+            except Exception:
+                pass
 
     def _apply_glass_theme(self):
         self.setStyleSheet(
@@ -361,6 +433,8 @@ class ConversationPanel(QWidget):
             self.header_avatar.set_dark(True)
         if hasattr(self, "title_label"):
             self.title_label.setStyleSheet("color: #ecebe7;")
+        # 气泡跟到 dark
+        self._reapply_bubble_theme("dark")
 
     # ------------------------------------------------------------- send flow --
 

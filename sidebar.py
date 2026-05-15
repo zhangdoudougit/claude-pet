@@ -86,7 +86,9 @@ class ConversationCard(QFrame):
         self._timer.timeout.connect(self._tick)
         self._timer.start(40)
         if theme_mgr is not None:
-            theme_mgr.theme_changed.connect(lambda _n: self.update())
+            theme_mgr.theme_changed.connect(self.apply_theme)
+            # 初始应用一次, 别等下次切换
+            self.apply_theme(theme_mgr.name)
 
     def _build(self, foamo_icon: QIcon):
         layout = QHBoxLayout(self)
@@ -144,6 +146,16 @@ class ConversationCard(QFrame):
     def refresh(self):
         self.label.setText(self.entry.name)
         self.sub_label.setText(self._format_sub())
+        self.update()
+
+    def apply_theme(self, name: str):
+        """主题切换时刷新 label/sub_label 颜色, 避免 dark 模式下文字消失."""
+        if name == "glass":
+            self.label.setStyleSheet("color: #ecebe7;")
+            self.sub_label.setStyleSheet("color: #6e6b62; background: transparent;")
+        else:
+            self.label.setStyleSheet("color: #1d1b16;")
+            self.sub_label.setStyleSheet("color: #9a9387; background: transparent;")
         self.update()
 
     def enterEvent(self, _ev):
@@ -411,13 +423,56 @@ class Sidebar(QWidget):
         self._rebuild()
 
     def _apply_theme(self, *_args):
-        if self.theme_mgr is None:
-            # default warm
-            self.setStyleSheet("Sidebar { background: #f3efe6; }")
-            return
-        p = self.theme_mgr.palette
-        bg = p.get("paperWarm") or p.get("glass1") or "#f3efe6"
-        self.setStyleSheet(f"Sidebar {{ background: {bg}; }}")
+        name = self.theme_mgr.name if self.theme_mgr is not None else "warm"
+        if name == "glass":
+            bg = "rgba(22, 24, 28, 0.95)"   # opaque-ish for now (frameless)
+            search_bg = "rgba(255,255,255,0.06)"
+            search_focus = "1.5px solid #5ea8c9"
+            search_text = "#ecebe7"
+            placeholder = "color: #6e6b62;"
+            add_bg = "rgba(255,255,255,0.06)"
+            add_bg_hover = "rgba(255,255,255,0.10)"
+            add_color = "#a8a59b"
+            settings_color = "#ecebe7"
+            settings_hover = "rgba(255,255,255,0.06)"
+        else:
+            bg = "#f3efe6"
+            search_bg = "rgba(0,0,0,0.04)"
+            search_focus = "1.5px solid #7fb993"
+            search_text = "#1d1b16"
+            placeholder = "color: #9a9387;"
+            add_bg = "rgba(0,0,0,0.04)"
+            add_bg_hover = "rgba(0,0,0,0.08)"
+            add_color = "#6b6457"
+            settings_color = "#1d1b16"
+            settings_hover = "rgba(0,0,0,0.04)"
+
+        self.setStyleSheet(
+            f"Sidebar {{ background: {bg}; }}"
+            f" QLineEdit {{ background: {search_bg}; border: none; "
+            f"   border-radius: 16px; padding: 0 12px; "
+            f"   font-size: 12px; color: {search_text}; }}"
+            f" QLineEdit:focus {{ border: {search_focus}; }}"
+            f" QLineEdit::placeholder {{ {placeholder} }}"
+        )
+        # 顶部 + 按钮
+        if hasattr(self, "add_btn"):
+            self.add_btn.setStyleSheet(
+                f"QPushButton {{ background: {add_bg}; border-radius: 16px;"
+                f"  font-size: 16px; color: {add_color}; }}"
+                f"QPushButton:hover {{ background: {add_bg_hover}; }}"
+            )
+        # 底部设置
+        if hasattr(self, "settings_btn"):
+            self.settings_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; border: none; "
+                f"text-align: left; padding: 0 10px; font-size: 11pt; color: {settings_color}; }}"
+                f"QPushButton:hover {{ background: {settings_hover}; border-radius: 8px; }}"
+            )
+        # 卡片文字
+        for card in self._cards.values():
+            if hasattr(card, "apply_theme"):
+                card.apply_theme(name)
 
     def _build(self):
         layout = QVBoxLayout(self)
@@ -476,11 +531,13 @@ class Sidebar(QWidget):
                 w.setParent(None)
                 w.deleteLater()
         entries = self.store.list_entries()
+        name = self.theme_mgr.name if self.theme_mgr is not None else "warm"
         for i, entry in enumerate(entries):
             card = ConversationCard(entry, self.foamo_icon, theme_mgr=self.theme_mgr)
             card.clicked.connect(self.card_clicked.emit)
             card.rightClicked.connect(self._on_right_click)
             card.set_selected(entry.key == self._current_key)
+            card.apply_theme(name)
             self._cards[entry.key] = card
             self.card_area.addWidget(card)
             if i == 0 and len(entries) > 1:

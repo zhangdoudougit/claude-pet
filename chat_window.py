@@ -266,12 +266,12 @@ THEMES = {
         "menu_bg":       "#fcfcfe",
         "menu_hover":    "#e8e8ee",
         # 项目名点缀色 — 跟 header 底色形成足够对比
-        "project_accent": "#c2410c",     # 深橙
-        # 气泡 (微信 light: 用户绿底深字, 助手白底深字)
-        "bubble_user_bg": "#95EC69",
-        "bubble_user_fg": "#2c2c2c",
-        "bubble_asst_bg": "rgba(255, 255, 255, 235)",
-        "bubble_asst_fg": "#2c2c2c",
+        "project_accent": "#7fb993",     # design accent 薄荷
+        # 气泡 (Claude Design warm: 用户薄荷淡底, 助手白底)
+        "bubble_user_bg": "#e8f1e9",
+        "bubble_user_fg": "#22372a",
+        "bubble_asst_bg": "#ffffff",
+        "bubble_asst_fg": "#1d1b16",
     },
     "dark": {
         "panel_bg":      "rgba(24, 24, 32, 220)",
@@ -295,12 +295,12 @@ THEMES = {
         "menu_bg":       "#23232e",
         "menu_hover":    "#3a3a48",
         # 项目名点缀色
-        "project_accent": "#ffd062",     # 金黄
-        # 气泡 (微信 dark: 用户暗绿+浅字, 助手灰底+浅字)
-        "bubble_user_bg": "#3e6b3e",
-        "bubble_user_fg": "#ede5dd",
-        "bubble_asst_bg": "rgba(50, 50, 60, 240)",
-        "bubble_asst_fg": "#dadada",
+        "project_accent": "#5ea8c9",     # design glass accent 青蓝
+        # 气泡 (Claude Design glass: 用户半透明青蓝, 助手半透明白)
+        "bubble_user_bg": "rgba(94,168,201,0.28)",
+        "bubble_user_fg": "#ecebe7",
+        "bubble_asst_bg": "rgba(255,255,255,0.06)",
+        "bubble_asst_fg": "#ecebe7",
     },
 }
 
@@ -582,22 +582,22 @@ def _render_md_table(m: "re.Match", inlines: list[str],
 # - 标题: 跟气泡主字色一致, 不再硬编码黑色
 _MD_PALETTES = {
     "light": {
-        "h_color":        "#1a1a1a",
-        "inline_bg":      "#f0f0f0",
-        "inline_fg":      "#c7254e",
-        "fence_bg":       "#f6f8fa",
-        "fence_fg":       "#24292e",
-        "table_border":   "#d0d0d0",
-        "table_head_bg":  "#f0f0f0",
+        "h_color":        "#1d1b16",
+        "inline_bg":      "#efeadd",     # design code 米色
+        "inline_fg":      "#5b4632",
+        "fence_bg":       "#f3efe6",
+        "fence_fg":       "#1d1b16",
+        "table_border":   "#e8e3d6",
+        "table_head_bg":  "#f3efe6",
     },
     "dark": {
-        "h_color":        "#ede5dd",
-        "inline_bg":      "#3f3f4c",
-        "inline_fg":      "#e8b8d6",
-        "fence_bg":       "#1c1c26",
-        "fence_fg":       "#dcdcd2",
-        "table_border":   "#4a4a5a",
-        "table_head_bg":  "#23232e",
+        "h_color":        "#ecebe7",
+        "inline_bg":      "rgba(255,255,255,0.06)",
+        "inline_fg":      "#d7e7e8",
+        "fence_bg":       "rgba(0,0,0,0.20)",
+        "fence_fg":       "#ecebe7",
+        "table_border":   "rgba(255,255,255,0.08)",
+        "table_head_bg":  "rgba(255,255,255,0.04)",
     },
 }
 
@@ -2932,6 +2932,10 @@ class ChatWindow(QWidget):
             Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
         )
         self.setMouseTracking(True)
+        # 14px 圆角 (用 mask, resize 时 resizeEvent 重设)
+        self._corner_radius = 14
+        # 试着开 Win11 Mica (frameless 后默认丢, 重新拉一次)
+        self._enable_mica()
 
         # Lazy imports to avoid circular issues
         from conversation_store import ConversationStore
@@ -3022,6 +3026,45 @@ class ChatWindow(QWidget):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def _enable_mica(self):
+        """Win11 Mica 在 frameless 模式下不会自动启用 — 重新拉一次."""
+        if not sys.platform.startswith("win"):
+            return
+        try:
+            import ctypes
+            from ctypes import wintypes
+            hwnd = int(self.winId())
+            # DWMWA_SYSTEMBACKDROP_TYPE=38, value=2 (mica)
+            backdrop = ctypes.c_int(2)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                wintypes.HWND(hwnd),
+                wintypes.DWORD(38),
+                ctypes.byref(backdrop), ctypes.sizeof(backdrop),
+            )
+        except Exception:
+            pass
+
+    def _apply_rounded_mask(self):
+        """frameless 窗手画圆角 = setMask 上一个 rounded region."""
+        from PyQt6.QtGui import QRegion, QPainterPath
+        from PyQt6.QtCore import QRectF
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()),
+                            self._corner_radius, self._corner_radius)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if not self.isMaximized():
+            self._apply_rounded_mask()
+        else:
+            self.clearMask()
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._apply_rounded_mask()
+        self._enable_mica()
 
     def _broadcast_theme(self, name: str):
         """Apply current theme to window bg + all panels."""
