@@ -2927,6 +2927,12 @@ class ChatWindow(QWidget):
         self.resize(900, 620)
         self.setMinimumSize(720, 480)
 
+        # Frameless + self-drawn chrome (VR2)
+        self.setWindowFlags(
+            Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+        )
+        self.setMouseTracking(True)
+
         # Lazy imports to avoid circular issues
         from conversation_store import ConversationStore
         from permission_router import PermissionRouter
@@ -2934,6 +2940,8 @@ class ChatWindow(QWidget):
         from chat_panel import ConversationPanel
         from claude_worker import ClaudeWorker
         from PyQt6.QtWidgets import QStackedWidget
+        from theme import ThemeManager
+        from chrome_widgets import TitleBar
 
         self._cls_AddProjectDialog = AddProjectDialog
         self._cls_ConversationPanel = ConversationPanel
@@ -2947,7 +2955,20 @@ class ChatWindow(QWidget):
         icon_path = ROOT / "foamo.ico"
         self.foamo_icon = QIcon(str(icon_path)) if icon_path.exists() else QIcon()
 
-        h = QHBoxLayout(self)
+        # Theme manager + title bar
+        self.theme_mgr = ThemeManager(STATE_DIR / "theme", self)
+        self.title_bar = TitleBar(self.theme_mgr, app_label="和泡沫聊", parent=self)
+        self.title_bar.win_ctrls.minimize_clicked.connect(self.showMinimized)
+        self.title_bar.win_ctrls.maximize_clicked.connect(self._toggle_max)
+        self.title_bar.win_ctrls.close_clicked.connect(self.close)
+
+        from PyQt6.QtWidgets import QVBoxLayout as _QVBL
+        outer = _QVBL(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self.title_bar)
+
+        h = QHBoxLayout()
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
 
@@ -2972,6 +2993,8 @@ class ChatWindow(QWidget):
         self.stack = QStackedWidget()
         h.addWidget(self.stack, 1)
 
+        outer.addLayout(h)
+
         self._panels: dict[str, "ConversationPanel"] = {}
         self._current_key: str = "chat"
         self._pending_perm: dict[str, tuple[dict, object]] = {}  # key -> (payload, responder)
@@ -2985,6 +3008,14 @@ class ChatWindow(QWidget):
 
         self.store.entry_added.connect(self._on_entry_added)
         self.store.entry_removed.connect(self._on_entry_removed)
+
+    # ---------- window chrome ----------
+
+    def _toggle_max(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
 
     # ---------- panel lifecycle ----------
 
