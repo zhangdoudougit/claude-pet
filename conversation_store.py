@@ -4,9 +4,10 @@
 from __future__ import annotations
 import hashlib
 import json
+import re
 import shutil
 import time
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -24,14 +25,16 @@ class ConversationEntry:
     path: Optional[str] = None
     short_code: Optional[str] = None
     color: Optional[str] = None
-    last_active_ts: int = 0
-    created_ts: int = 0
+    last_active_ts: float = 0
+    created_ts: float = 0
     badge: BadgeState = "none"
     unread_count: int = 0
 
 
 class ConversationStore(QObject):
     """单例式. 由 ChatWindow 持有, sidebar/chat_panel/worker 共享."""
+
+    _MUTABLE_FIELDS = frozenset({"name", "path", "short_code", "color"})
 
     COLOR_PALETTE = [
         "#E07A5F", "#E8A87C", "#3D5A6C", "#5B7553",
@@ -53,7 +56,7 @@ class ConversationStore(QObject):
     # ----- load / migrate -----
 
     def _load_all(self):
-        now = int(time.time())
+        now = time.time()
         # 闲聊永远存在
         self._entries["chat"] = ConversationEntry(
             key="chat", kind="chat", name="闲聊",
@@ -83,16 +86,20 @@ class ConversationStore(QObject):
             color = raw["color"]
         else:
             color = self._auto_color(path or key)
-        mtime = int((conv_dir / "meta.json").stat().st_mtime)
-        last_active_ts = int(raw.get("last_active_ts") or mtime)
-        created_ts = int(raw.get("created_ts") or mtime)
+        mtime = (conv_dir / "meta.json").stat().st_mtime
+        last_active_ts = float(raw.get("last_active_ts") or mtime)
+        created_ts = float(raw.get("created_ts") or mtime)
         entry = ConversationEntry(
             key=key, kind="project", name=name, path=path,
             short_code=short_code, color=color,
             last_active_ts=last_active_ts, created_ts=created_ts,
         )
-        # 把迁移结果写回, 避免下次再算
-        self._write_meta(entry)
+        needs_write = (
+            "short_code" not in raw or "color" not in raw
+            or "last_active_ts" not in raw or "created_ts" not in raw
+        )
+        if needs_write:
+            self._write_meta(entry)
         return entry
 
     def _auto_color(self, seed: str) -> str:
@@ -129,7 +136,7 @@ class ConversationStore(QObject):
         key = "proj_" + hashlib.md5(path.encode()).hexdigest()[:8]
         if key in self._entries:
             return self._entries[key]
-        now = int(time.time())
+        now = time.time()
         entry = ConversationEntry(
             key=key, kind="project", name=name, path=path,
             short_code=short_code, color=color,
@@ -156,7 +163,7 @@ class ConversationStore(QObject):
         if entry is None or entry.kind != "project":
             return
         for k, v in fields.items():
-            if hasattr(entry, k):
+            if k in self._MUTABLE_FIELDS:
                 setattr(entry, k, v)
         self._write_meta(entry)
         self.entry_changed.emit(key)
@@ -165,7 +172,7 @@ class ConversationStore(QObject):
         entry = self._entries.get(key)
         if entry is None:
             return
-        entry.last_active_ts = int(time.time())
+        entry.last_active_ts = time.time()
         self._write_meta(entry)
         self.entry_changed.emit(key)
 
@@ -183,12 +190,12 @@ class ConversationStore(QObject):
         if entry is None:
             return
         entry.unread_count += 1
+        entry.badge = "unread"
         self.entry_changed.emit(key)
 
 
 def _default_short_code(name: str) -> str:
     """取 'smart_plc_v2' → 'SPV', 'demo' → 'DEM'."""
-    import re
     parts = re.split(r"[_\-\s]+", name)
     if len(parts) >= 2:
         initials = "".join(p[0] for p in parts if p)[:4]

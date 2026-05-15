@@ -87,3 +87,25 @@ def test_delete_project(tmp_store, tmp_path):
 def test_cannot_delete_chat(tmp_store):
     with pytest.raises(ValueError):
         tmp_store.delete_project("chat", purge_history=False)
+
+
+def test_update_entry_only_mutates_whitelist(tmp_store, tmp_path):
+    p = tmp_path / "u"; p.mkdir()
+    e = tmp_store.add_project(str(p), "u", "U", "#E07A5F")
+    tmp_store.update_entry(e.key, name="renamed", color="#3D5A6C",
+                           kind="chat", badge="thinking")  # last two ignored
+    updated = tmp_store.get(e.key)
+    assert updated.name == "renamed"
+    assert updated.color == "#3D5A6C"
+    assert updated.kind == "project"      # not mutated
+    assert updated.badge == "none"        # not mutated
+
+
+def test_bump_unread_sets_badge_and_increments(tmp_store, tmp_path):
+    p = tmp_path / "b"; p.mkdir()
+    e = tmp_store.add_project(str(p), "b", "B", "#7C8290")
+    tmp_store.bump_unread(e.key)
+    tmp_store.bump_unread(e.key)
+    updated = tmp_store.get(e.key)
+    assert updated.badge == "unread"
+    assert updated.unread_count == 2
