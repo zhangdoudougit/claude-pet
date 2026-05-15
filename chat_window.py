@@ -2956,7 +2956,10 @@ class ChatWindow(QWidget):
         self.sidebar.card_clicked.connect(self._switch_to)
         self.sidebar.add_project_requested.connect(self._show_add_dialog)
         self.sidebar.edit_project_requested.connect(self._show_edit_dialog)
-        self.sidebar.delete_project_requested.connect(self._on_delete_requested)
+        # NOTE: Sidebar._confirm_delete already calls store.delete_project with
+        # the correct purge_history flag. ChatWindow listens to entry_removed
+        # instead — connecting delete_project_requested too would double-delete
+        # and override the user's "purge history" choice.
         h.addWidget(self.sidebar)
 
         # 1px vertical separator
@@ -2969,9 +2972,9 @@ class ChatWindow(QWidget):
         self.stack = QStackedWidget()
         h.addWidget(self.stack, 1)
 
-        self._panels: dict = {}
+        self._panels: dict[str, "ConversationPanel"] = {}
         self._current_key: str = "chat"
-        self._pending_perm: dict = {}  # conv_key -> (payload, responder)
+        self._pending_perm: dict[str, tuple[dict, object]] = {}  # key -> (payload, responder)
 
         # Build panels — stagger by 100ms to ease cold-start CPU
         entries = self.store.list_entries()
@@ -3013,16 +3016,22 @@ class ChatWindow(QWidget):
 
     def _on_entry_removed(self, key: str):
         panel = self._panels.pop(key, None)
+        # Free any orphaned pending permission request so the hook doesn't
+        # hang for 60s (responder never called).
+        pending = self._pending_perm.pop(key, None)
+        if pending is not None:
+            try:
+                pending[1]("deny")
+            except Exception:
+                pass
         if panel is None:
             return
-        # Stop the worker
         try:
             panel.worker.stop()
         except Exception:
             pass
         self.stack.removeWidget(panel)
         panel.deleteLater()
-        # If we were displaying it, fall back to chat
         if self._current_key == key:
             self._switch_to("chat")
 
@@ -3056,9 +3065,6 @@ class ChatWindow(QWidget):
         dlg = self._cls_AddProjectDialog(self.store, self.foamo_icon,
                                          editing=entry, parent=self)
         dlg.exec()
-
-    def _on_delete_requested(self, key: str):
-        self.store.delete_project(key, purge_history=False)
 
     # ---------- permission routing ----------
 
