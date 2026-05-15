@@ -37,6 +37,7 @@ class ClaudeWorker(QObject):
         self.claude_bin = claude_bin
         self.cwd = cwd
         self._proc: Optional[QProcess] = None
+        self._stopping: bool = False
         self._reset_state()
 
     # ------------------------------------------------------------------
@@ -90,6 +91,7 @@ class ClaudeWorker(QObject):
             self.error.emit("worker busy")
             return
 
+        self._stopping = False
         self._reset_state()
 
         sid = self._load_session()
@@ -146,9 +148,11 @@ class ClaudeWorker(QObject):
 
     def stop(self) -> None:
         """Kill the subprocess if running."""
-        if self._proc is not None:
+        if self.is_running():
+            self._stopping = True
             try:
                 self._proc.kill()
+                self._proc.waitForFinished(2000)
             except Exception:
                 pass
 
@@ -167,6 +171,9 @@ class ClaudeWorker(QObject):
                 self._handle_event(line)
 
     def _on_finished(self, exit_code: int, _exit_status) -> None:
+        was_stopped = self._stopping
+        self._stopping = False  # reset for next send
+
         # Flush any partial line remaining in buffer
         if self._stdout_buf:
             for ln in self._stdout_buf.decode("utf-8", errors="replace").splitlines():
@@ -175,12 +182,12 @@ class ClaudeWorker(QObject):
                     self._handle_event(ln)
             self._stdout_buf = b""
 
-        # Persist session id if newly captured
-        if self._captured_sid and not self._load_session():
+        # Persist session id if newly captured or rotated
+        if self._captured_sid and self._captured_sid != self._load_session():
             self._save_session(self._captured_sid)
 
-        # Emit fallback text if claude produced nothing
-        if not self._current_text:
+        # Emit fallback text if claude produced nothing (skip on user-initiated stop)
+        if not self._current_text and not was_stopped:
             self.text_chunk.emit(f"⚠️ (claude 退出码 {exit_code},无输出)")
 
         self.tool_event.emit({
@@ -204,9 +211,14 @@ class ClaudeWorker(QObject):
     def _handle_event(self, line: str) -> None:
         try:
             evt = json.loads(line)
-        except Exception:
+        except json.JSONDecodeError:
             return
+        try:
+            self._handle_parsed_event(evt)
+        except Exception as e:
+            self.error.emit(f"event handling failed: {e}")
 
+    def _handle_parsed_event(self, evt: dict) -> None:
         # Capture session id from the very first event that carries it
         if not self._captured_sid:
             sid = evt.get("session_id")
@@ -264,6 +276,8 @@ class ClaudeWorker(QObject):
                             "tool_use_id": tid,
                             "input": pre_input,
                         })
+                        # Already emitted; remove so content_block_stop won't double-fire
+                        self._tool_index_to_id.pop(idx, None)
 
             elif et == "content_block_stop":
                 idx = inner.get("index")
