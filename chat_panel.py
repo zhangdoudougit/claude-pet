@@ -23,6 +23,7 @@ from claude_worker import ClaudeWorker
 from chat_window import (
     Bubble, ChatInput, ToolChip, ToolStrip, MessageRow,
     SystemNotice, load_permission_mode, HOOK_SETTINGS_FILE,
+    _resolve_proxy,
 )
 
 
@@ -196,13 +197,21 @@ class ConversationPanel(QWidget):
         except Exception:
             hook_settings = None
 
+        # 注入代理 (国内连 Anthropic API 必须走代理, 不然 403).
+        # 从 .chat_state/proxy 文件或 HTTPS_PROXY 环境变量读.
+        env_extra = {}
+        proxy = _resolve_proxy()
+        if proxy:
+            for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                env_extra[k] = proxy
+
         self.worker.send(
             prompt=text,
             perm_mode=load_permission_mode(),
             model=None,
             hook_settings=hook_settings,
             mcp_file=None,
-            env_extra={},
+            env_extra=env_extra,
         )
 
         self.user_sent.emit(text)
