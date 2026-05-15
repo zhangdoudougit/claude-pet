@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame,
@@ -18,6 +19,8 @@ from PyQt6.QtWidgets import (
 
 from conversation_store import ConversationStore, ConversationEntry
 from claude_worker import ClaudeWorker
+from pet_avatar import PetAvatar
+from status_pill import StatusPill
 
 # Reuse helpers from existing chat_window — DO NOT redefine them here
 from chat_window import (
@@ -62,16 +65,57 @@ class ConversationPanel(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # Header bar — 36px fixed height
+        # Header — 64px design with avatar + mood + status pill
         hbar = QFrame()
-        hbar.setFixedHeight(36)
+        hbar.setFixedHeight(64)
+        hbar.setObjectName("chat_header")
         hlay = QHBoxLayout(hbar)
-        hlay.setContentsMargins(12, 0, 12, 0)
-        self.title_label = QLabel(self.entry.name if self.entry else "")
-        hlay.addWidget(self.title_label)
-        hlay.addStretch(1)
-        self.status_label = QLabel("· 待机")
+        hlay.setContentsMargins(22, 14, 22, 14)
+        hlay.setSpacing(12)
+
+        self.header_avatar = PetAvatar(size=32, mood="idle")
+        hlay.addWidget(self.header_avatar)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        title_col.setContentsMargins(0, 0, 0, 0)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
+        title_row.setContentsMargins(0, 0, 0, 0)
+        self.title_label = QLabel(self.entry.name if self.entry else "泡沫")
+        tf = self.title_label.font()
+        tf.setPointSize(11)
+        tf.setWeight(QFont.Weight.DemiBold)
+        self.title_label.setFont(tf)
+        title_row.addWidget(self.title_label)
+
+        self.subtitle_label = QLabel("· 桌面伙伴")
+        sf = self.subtitle_label.font()
+        sf.setPointSize(8)
+        self.subtitle_label.setFont(sf)
+        self.subtitle_label.setStyleSheet("color: #9a9387;")
+        title_row.addWidget(self.subtitle_label)
+        title_row.addStretch(1)
+        title_col.addLayout(title_row)
+
+        self.mood_line = QLabel("正在和你聊点设计 · 心情 松弛")
+        mf = self.mood_line.font()
+        mf.setPointSize(8)
+        self.mood_line.setFont(mf)
+        self.mood_line.setStyleSheet("color: #6b6457;")
+        title_col.addWidget(self.mood_line)
+
+        hlay.addLayout(title_col, 1)
+
+        self.status_pill = StatusPill(state="idle")
+        hlay.addWidget(self.status_pill)
+
+        # legacy status_label kept invisible for backwards-compat
+        self.status_label = QLabel("")
+        self.status_label.setVisible(False)
         hlay.addWidget(self.status_label)
+
         v.addWidget(hbar)
 
         # Bubble scroll area
@@ -190,6 +234,9 @@ class ConversationPanel(QWidget):
         self.store.touch(self.entry.key)
         self.store.set_badge(self.entry.key, "thinking")
         self.status_label.setText("· 思考中")
+        self.status_pill.set_state("thinking")
+        self.header_avatar.set_mood("talking")
+        self.mood_line.setText("正在帮你想 · 心情 专注")
 
         # 5. Launch worker
         try:
@@ -298,6 +345,9 @@ class ConversationPanel(QWidget):
 
         self.store.touch(self.entry.key)
         self.status_label.setText("· 待机")
+        self.status_pill.set_state("idle")
+        self.header_avatar.set_mood("idle")
+        self.mood_line.setText("正在和你聊点设计 · 心情 松弛")
 
         # Reset per-turn state (chip dicts too, so a crash-path call to
         # _finalize_turn doesn't carry stale tool state into the next turn)
@@ -320,6 +370,9 @@ class ConversationPanel(QWidget):
         self.bubble_layout.insertWidget(self.bubble_layout.count() - 1, notice)
         self.store.set_badge(self.entry.key, "none")
         self.status_label.setText("· 错误")
+        self.status_pill.set_state("idle")
+        self.header_avatar.set_mood("idle")
+        self.mood_line.setText("刚刚踩到点意外 · 心情 心虚")
         # Stop the thinking spinner before dropping the reference (the Bubble
         # owns a QTimer that keeps ticking if we just null the ref).
         if self._current_bubble is not None and hasattr(self._current_bubble, "set_thinking"):

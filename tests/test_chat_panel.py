@@ -79,3 +79,21 @@ def test_panel_assistant_done_persists_history(tmp_path, qapp, qtbot):
     data = json.loads(history_file.read_text(encoding="utf-8"))
     assert any(row.get("role") == "assistant" and row.get("text") == "answer text"
                for row in data)
+
+
+def test_panel_has_redesigned_header(tmp_path, qapp, qtbot):
+    from conversation_store import ConversationStore
+    from claude_worker import ClaudeWorker
+    from chat_panel import ConversationPanel
+    from pet_avatar import PetAvatar
+    from status_pill import StatusPill
+    store = ConversationStore(state_dir=tmp_path)
+    entry = store.get("chat")
+    conv_dir = tmp_path / "conv" / "chat"
+    conv_dir.mkdir(parents=True, exist_ok=True)
+    worker = ClaudeWorker("chat", conv_dir, "claude", str(tmp_path))
+    panel = ConversationPanel(entry, store, worker)
+    qtbot.addWidget(panel)
+    assert isinstance(panel.header_avatar, PetAvatar)
+    assert isinstance(panel.status_pill, StatusPill)
+    assert panel.mood_line.text().startswith("正在和你")
