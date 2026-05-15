@@ -17,6 +17,60 @@ import json
 import sys
 from pathlib import Path
 
+
+def _try_route_via_socket(tool_name: str, tool_input: dict, cwd: str) -> str | None:
+    """Try to route the permission request to the main foamo process via local socket.
+
+    Returns 'allow' / 'deny' on success, or None if the route is unavailable
+    (env var missing, socket not listening, timeout, parse error).
+    """
+    import os
+    conv_key = os.environ.get("FOAMO_CONV_KEY", "")
+    if not conv_key:
+        return None
+    try:
+        from PyQt6.QtCore import QCoreApplication
+        from PyQt6.QtNetwork import QLocalSocket
+    except ImportError:
+        return None
+
+    # QLocalSocket needs a QCoreApplication instance for the event loop.
+    app = QCoreApplication.instance()
+    owned_app = False
+    if app is None:
+        app = QCoreApplication(sys.argv)
+        owned_app = True
+
+    socket = QLocalSocket()
+    socket.connectToServer("foamo_perm_v1")
+    if not socket.waitForConnected(500):
+        _log(f"[route] connect failed: {socket.errorString()}")
+        return None
+
+    payload = {
+        "conv_key": conv_key,
+        "payload": {
+            "tool_name": tool_name,
+            "tool_input": tool_input,
+            "cwd": cwd,
+        },
+    }
+    socket.write(json.dumps(payload).encode("utf-8"))
+    socket.flush()
+    # 60s 给用户决策
+    if not socket.waitForReadyRead(60_000):
+        _log(f"[route] timeout waiting decision")
+        return None
+
+    raw = bytes(socket.readAll()).decode("utf-8", errors="replace")
+    try:
+        decision = json.loads(raw).get("decision")
+    except json.JSONDecodeError:
+        return None
+    socket.disconnectFromServer()
+    _log(f"[route] decision={decision}")
+    return decision
+
 ROOT = Path(__file__).parent
 STATE_DIR = ROOT / ".chat_state"
 PERMISSION_MODE_FILE = STATE_DIR / "permission_mode"
@@ -205,12 +259,22 @@ def main():
         _log(f"[acceptEdits] {tool_name}")
         sys.exit(0)
 
-    # 3) 弹对话框
-    _log(f"prompt {tool_name}")
-    if show_dialog(tool_name, tool_input, cwd):
-        _log(f"  → allow")
+    # 3) 先尝试 socket 路由到主进程
+    decision = _try_route_via_socket(tool_name, tool_input, cwd)
+    if decision == "allow":
+        _log(f"  → allow (routed)")
         sys.exit(0)
-    _log(f"  → deny")
+    if decision == "deny":
+        _log(f"  → deny (routed)")
+        print(f"用户在聊天框拒绝了 {tool_name} 调用")
+        sys.exit(2)
+
+    # 4) 兜底: 弹独立对话框 (route 失败 / 无 env / 老版本主进程)
+    _log(f"prompt {tool_name} (standalone)")
+    if show_dialog(tool_name, tool_input, cwd):
+        _log(f"  → allow (standalone)")
+        sys.exit(0)
+    _log(f"  → deny (standalone)")
     print(f"用户在聊天框拒绝了 {tool_name} 调用")
     sys.exit(2)
 
