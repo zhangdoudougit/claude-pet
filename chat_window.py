@@ -2910,6 +2910,199 @@ class ChatPanel(QWidget):
         super().closeEvent(event)
 
 
+
+# ==================== Task 6: New ChatWindow (sidebar + stack) ====================
+
+class ChatWindow(QWidget):
+    """Top-level chat window with left sidebar + right stack of ConversationPanels.
+
+    Owns ConversationStore + PermissionRouter. Each conversation entry gets one
+    ClaudeWorker + one ConversationPanel pair, kept alive in QStackedWidget
+    (switching is cheap; background workers keep running).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("和泡沫聊")
+        self.resize(900, 620)
+        self.setMinimumSize(720, 480)
+
+        # Lazy imports to avoid circular issues
+        from conversation_store import ConversationStore
+        from permission_router import PermissionRouter
+        from sidebar import Sidebar, AddProjectDialog
+        from chat_panel import ConversationPanel
+        from claude_worker import ClaudeWorker
+        from PyQt6.QtWidgets import QStackedWidget
+
+        self._cls_AddProjectDialog = AddProjectDialog
+        self._cls_ConversationPanel = ConversationPanel
+        self._cls_ClaudeWorker = ClaudeWorker
+
+        self.store = ConversationStore(STATE_DIR)
+        self.router = PermissionRouter(self)
+        self.router.permission_requested.connect(self._on_permission_request)
+
+        # foamo icon
+        icon_path = ROOT / "foamo.ico"
+        self.foamo_icon = QIcon(str(icon_path)) if icon_path.exists() else QIcon()
+
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+
+        self.sidebar = Sidebar(self.store, self.foamo_icon, self)
+        self.sidebar.setFixedWidth(240)
+        self.sidebar.card_clicked.connect(self._switch_to)
+        self.sidebar.add_project_requested.connect(self._show_add_dialog)
+        self.sidebar.edit_project_requested.connect(self._show_edit_dialog)
+        self.sidebar.delete_project_requested.connect(self._on_delete_requested)
+        h.addWidget(self.sidebar)
+
+        # 1px vertical separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setStyleSheet("background: rgba(0,0,0,0.06); max-width: 1px;")
+        h.addWidget(sep)
+
+        # Stack
+        self.stack = QStackedWidget()
+        h.addWidget(self.stack, 1)
+
+        self._panels: dict = {}
+        self._current_key: str = "chat"
+        self._pending_perm: dict = {}  # conv_key -> (payload, responder)
+
+        # Build panels — stagger by 100ms to ease cold-start CPU
+        entries = self.store.list_entries()
+        if len(entries) > 5:
+            _log(f"[window] {len(entries)} conversations registered — cold start may be slow")
+        for i, entry in enumerate(entries):
+            QTimer.singleShot(i * 100, lambda k=entry.key: self._ensure_panel(k))
+
+        self.store.entry_added.connect(self._on_entry_added)
+        self.store.entry_removed.connect(self._on_entry_removed)
+
+    # ---------- panel lifecycle ----------
+
+    def _ensure_panel(self, key: str):
+        if key in self._panels:
+            return
+        entry = self.store.get(key)
+        if entry is None:
+            return
+        cwd = entry.path or DEFAULT_CWD
+        conv_dir = self.store.conv_dir / key
+        conv_dir.mkdir(parents=True, exist_ok=True)
+        worker = self._cls_ClaudeWorker(key, conv_dir, CLAUDE_BIN, cwd, parent=self)
+        panel = self._cls_ConversationPanel(entry, self.store, worker, parent=self)
+        self._panels[key] = panel
+        self.stack.addWidget(panel)
+        # If this is the first panel added (chat), make it current and update sidebar
+        if self.stack.count() == 1:
+            self.stack.setCurrentWidget(panel)
+            self._current_key = key
+            self.sidebar.set_current(key)
+        elif key == self._current_key:
+            self.stack.setCurrentWidget(panel)
+
+    def _on_entry_added(self, key: str):
+        self._ensure_panel(key)
+        # Auto-switch to newly added project
+        self._switch_to(key)
+
+    def _on_entry_removed(self, key: str):
+        panel = self._panels.pop(key, None)
+        if panel is None:
+            return
+        # Stop the worker
+        try:
+            panel.worker.stop()
+        except Exception:
+            pass
+        self.stack.removeWidget(panel)
+        panel.deleteLater()
+        # If we were displaying it, fall back to chat
+        if self._current_key == key:
+            self._switch_to("chat")
+
+    def _switch_to(self, key: str):
+        panel = self._panels.get(key)
+        if panel is None:
+            return
+        self.stack.setCurrentWidget(panel)
+        self.sidebar.set_current(key)
+        self._current_key = key
+        # Clear unread badge on activation
+        entry = self.store.get(key)
+        if entry is not None and entry.badge == "unread":
+            self.store.set_badge(key, "none")
+        # Drain pending permission request for this key
+        pending = self._pending_perm.pop(key, None)
+        if pending is not None:
+            payload, responder = pending
+            self._show_perm_dialog(key, payload, responder)
+
+    # ---------- add / edit / delete ----------
+
+    def _show_add_dialog(self):
+        dlg = self._cls_AddProjectDialog(self.store, self.foamo_icon, parent=self)
+        dlg.exec()
+
+    def _show_edit_dialog(self, key: str):
+        entry = self.store.get(key)
+        if entry is None:
+            return
+        dlg = self._cls_AddProjectDialog(self.store, self.foamo_icon,
+                                         editing=entry, parent=self)
+        dlg.exec()
+
+    def _on_delete_requested(self, key: str):
+        self.store.delete_project(key, purge_history=False)
+
+    # ---------- permission routing ----------
+
+    def _on_permission_request(self, conv_key: str, payload: dict, responder):
+        self.store.set_badge(conv_key, "permission")
+        panel = self._panels.get(conv_key)
+        if panel is None:
+            # Conversation gone — deny immediately to free the hook
+            try:
+                responder("deny")
+            except Exception:
+                pass
+            return
+        if self.stack.currentWidget() is panel:
+            self._show_perm_dialog(conv_key, payload, responder)
+        else:
+            # Stash; will pop dialog when user switches to this card
+            self._pending_perm[conv_key] = (payload, responder)
+
+    def _show_perm_dialog(self, conv_key: str, payload: dict, responder):
+        # Reuse the existing standalone dialog from permission_dialog.py
+        try:
+            from permission_dialog import show_dialog
+        except Exception:
+            responder("deny")
+            return
+        tool_name = payload.get("tool_name", "?")
+        tool_input = payload.get("tool_input", {}) or {}
+        cwd = payload.get("cwd", "") or ""
+        # Note: show_dialog creates its own QDialog, modal blocks until done.
+        try:
+            allowed = show_dialog(tool_name, tool_input, cwd)
+        except Exception as e:
+            _log(f"[window] perm dialog failed: {e}")
+            responder("deny")
+            self.store.set_badge(conv_key, "none")
+            return
+        responder("allow" if allowed else "deny")
+        # Clear badge after decision
+        entry = self.store.get(conv_key)
+        if entry is not None and entry.badge == "permission":
+            self.store.set_badge(conv_key, "none")
+
+
 # ---------------- 单跑测试 ----------------
 if __name__ == "__main__":
     import sys
