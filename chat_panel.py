@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QSize
-from PyQt6.QtGui import QFont, QPainter, QPainterPath, QIcon
+from PyQt6.QtGui import QFont, QPainter, QPainterPath, QIcon, QPen, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame,
@@ -85,6 +85,100 @@ from chat_window import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Composer icon helpers (paperclip / @ / </> / send-arrow)
+# 自绘 SVG 风 icon 作 QPushButton 的 QIcon, 替代 emoji
+# ---------------------------------------------------------------------------
+
+def _make_paperclip_icon(color: str = "#6b6457", size: int = 15) -> QIcon:
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), 1.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    # 简化 paperclip: 斜向椭圆 + 内圈
+    path = QPainterPath()
+    path.moveTo(11.5, 3.5)
+    path.lineTo(5.0, 10.0)
+    path.cubicTo(3.0, 12.0, 3.0, 13.5, 4.5, 13.5)
+    path.cubicTo(6.0, 13.5, 6.0, 12.5, 7.5, 11.0)
+    path.lineTo(12.0, 6.5)
+    p.drawPath(path)
+    p.end()
+    return QIcon(pm)
+
+
+def _make_at_icon(color: str = "#6b6457", size: int = 15) -> QIcon:
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), 1.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    cx, cy = size / 2.0, size / 2.0
+    # 内圆 + 外弧
+    p.drawEllipse(QRectF(cx - 2.5, cy - 2.5, 5.0, 5.0))
+    p.drawArc(QRectF(1.5, 1.5, size - 3.0, size - 3.0), 0, 270 * 16)
+    p.end()
+    return QIcon(pm)
+
+
+def _make_code_icon(color: str = "#6b6457", size: int = 15) -> QIcon:
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), 1.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    # < 和 >
+    path = QPainterPath()
+    path.moveTo(5.5, 4.5)
+    path.lineTo(2.0, 7.5)
+    path.lineTo(5.5, 10.5)
+    p.drawPath(path)
+    path2 = QPainterPath()
+    path2.moveTo(9.5, 4.5)
+    path2.lineTo(13.0, 7.5)
+    path2.lineTo(9.5, 10.5)
+    p.drawPath(path2)
+    p.end()
+    return QIcon(pm)
+
+
+def _make_send_arrow_icon(color: str = "#ffffff", size: int = 14) -> QIcon:
+    """向上箭头, design line 425: M12 19V5 M5 12l7-7 7 7"""
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), 1.8)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    cx = size / 2.0
+    # 垂直竖线
+    p.drawLine(int(cx), int(size * 0.20), int(cx), int(size * 0.82))
+    # 箭头 V
+    p.drawLine(int(size * 0.22), int(size * 0.50), int(cx), int(size * 0.20))
+    p.drawLine(int(size * 0.78), int(size * 0.50), int(cx), int(size * 0.20))
+    p.end()
+    return QIcon(pm)
+
+
 class ConversationPanel(QWidget):
     user_sent = pyqtSignal(str)
     streaming_started = pyqtSignal()
@@ -133,7 +227,7 @@ class ConversationPanel(QWidget):
         hlay.setContentsMargins(22, 14, 22, 14)
         hlay.setSpacing(12)
 
-        self.header_avatar = ChatAvatar(self.entry, self._foamo_icon, size=36)
+        self.header_avatar = ChatAvatar(self.entry, self._foamo_icon, size=32)
         hlay.addWidget(self.header_avatar)
 
         title_col = QVBoxLayout()
@@ -143,7 +237,12 @@ class ConversationPanel(QWidget):
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
         title_row.setContentsMargins(0, 0, 0, 0)
-        self.title_label = QLabel(self.entry.name if self.entry else "泡沫")
+        # design: chat 模式标题固定 "泡沫", project 模式用项目名
+        if self.entry and self.entry.kind == "chat":
+            _title_txt = "泡沫"
+        else:
+            _title_txt = self.entry.name if self.entry else "泡沫"
+        self.title_label = QLabel(_title_txt)
         tf = self.title_label.font()
         tf.setPointSize(11)
         tf.setWeight(QFont.Weight.DemiBold)
@@ -226,40 +325,50 @@ class ConversationPanel(QWidget):
         toolbar.setSpacing(4)
         toolbar.setContentsMargins(0, 4, 0, 0)
 
-        def _tool_btn(label: str, tooltip: str) -> QPushButton:
-            b = QPushButton(label)
+        def _tool_btn(icon: QIcon, tooltip: str) -> QPushButton:
+            b = QPushButton()
+            b.setIcon(icon)
+            b.setIconSize(QSize(15, 15))
             b.setFixedSize(28, 24)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setToolTip(tooltip)
             b.setStyleSheet(
-                "QPushButton { background: transparent; border: none; "
-                "color: #6b6457; font-size: 10pt; padding: 0; }"
-                "QPushButton:hover { background: rgba(0,0,0,0.04); "
-                "border-radius: 4px; }"
+                "QPushButton { background: transparent; border: none; padding: 0; }"
+                "QPushButton:hover { background: rgba(0,0,0,0.04); border-radius: 4px; }"
             )
             return b
 
-        self.tool_attach_btn = _tool_btn("📎", "附件 (尚未接入)")
-        self.tool_mention_btn = _tool_btn("@", "@ 提及 (尚未接入)")
-        self.tool_code_btn = _tool_btn("</>", "代码块 (尚未接入)")
+        self.tool_attach_btn = _tool_btn(_make_paperclip_icon(), "附件 (尚未接入)")
+        self.tool_mention_btn = _tool_btn(_make_at_icon(), "@ 提及 (尚未接入)")
+        self.tool_code_btn = _tool_btn(_make_code_icon(), "代码块 (尚未接入)")
         toolbar.addWidget(self.tool_attach_btn)
         toolbar.addWidget(self.tool_mention_btn)
         toolbar.addWidget(self.tool_code_btn)
         toolbar.addStretch(1)
 
-        self.kbd_hint = QLabel("↵ 发送 · ⇧↵ 换行")
-        kf = self.kbd_hint.font()
-        kf.setPointSize(8)
-        self.kbd_hint.setFont(kf)
-        self.kbd_hint.setStyleSheet("color: #9a9387; margin-right: 8px;")
+        # 快捷键 hint: ↵ / ⇧↵ 嵌米色 Code 块 (design line 419-420)
+        self.kbd_hint = QLabel(
+            "<span style='color:#9a9387;font-size:9pt;'>"
+            "<span style='background:#efeadd;color:#5b4632;padding:1px 5px;"
+            " border-radius:3px;font-family:Consolas,monospace;font-size:8pt;'>"
+            "↵</span> 发送 · "
+            "<span style='background:#efeadd;color:#5b4632;padding:1px 5px;"
+            " border-radius:3px;font-family:Consolas,monospace;font-size:8pt;'>"
+            "⇧↵</span> 换行</span>"
+        )
+        self.kbd_hint.setTextFormat(Qt.TextFormat.RichText)
+        self.kbd_hint.setStyleSheet("margin-right: 8px; background: transparent;")
         toolbar.addWidget(self.kbd_hint)
 
-        self.send_btn = QPushButton("发送")
+        # 主色发送按钮: accent fill + 上箭头 icon + "发送"
+        self.send_btn = QPushButton(" 发送")
+        self.send_btn.setIcon(_make_send_arrow_icon("#ffffff", 13))
+        self.send_btn.setIconSize(QSize(13, 13))
         self.send_btn.setFixedHeight(28)
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.setStyleSheet(
             "QPushButton { background: #7fb993; color: #fff; border: none; "
-            "border-radius: 8px; padding: 0 14px; font-size: 9.5pt; "
+            "border-radius: 8px; padding: 0 12px 0 10px; font-size: 9.5pt; "
             "font-weight: 600; }"
             "QPushButton:hover { background: #6fa882; }"
             "QPushButton:disabled { background: #c9c2b2; }"

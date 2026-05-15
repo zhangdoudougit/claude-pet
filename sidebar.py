@@ -18,49 +18,89 @@ from PyQt6.QtWidgets import (
 from conversation_store import ConversationStore, ConversationEntry
 
 
-SIDEBAR_WIDTH = 240
-CARD_HEIGHT = 56
-AVATAR_SIZE = 40
+# ---------- icon helpers (自绘 SVG icon → QPixmap) ----------
+
+def _make_search_icon_pixmap(size: int = 13) -> "QPixmap":
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#9a9387"), 1.6)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    # 圆 + 手柄
+    p.drawEllipse(QRectF(1.5, 1.5, 7, 7))
+    p.drawLine(8, 8, 11, 11)
+    p.end()
+    return pm
+
+
+def _make_brain_icon_pixmap(size: int = 15) -> "QPixmap":
+    from PyQt6.QtGui import QPixmap
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#6b6457"), 1.4)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    # 大脑近似: 两个半圆叠加 + 中线
+    p.drawEllipse(QRectF(2.0, 3.0, 5.5, 9.0))
+    p.drawEllipse(QRectF(7.5, 3.0, 5.5, 9.0))
+    p.drawLine(7, 5, 8, 5)
+    p.drawLine(7, 9, 8, 9)
+    p.end()
+    return pm
+
+
+SIDEBAR_WIDTH = 248        # design line 156: width: 248
+CARD_HEIGHT = 50           # padding 9 + avatar 28 + padding 9 ≈ 46, +6 margin
+AVATAR_SIZE = 28           # design line 207: PetAvatar size={28} / ProjectBadge size={28}
 BADGE_SIZE = 10
 
 
 # ---------- AvatarWidget ----------
+# 严格照设计 (pet-warm.jsx PetAvatar / ProjectBadge), 但闲聊保留小丸子 foamo.ico
+# (用户偏好覆盖设计稿: 闲聊就是小丸子, 不用 PetAvatar 那张米黄脸)
 
 class AvatarWidget(QWidget):
-    def __init__(self, entry: ConversationEntry, foamo_icon: QIcon, parent=None):
+    def __init__(self, entry: ConversationEntry, foamo_icon: QIcon,
+                 size: int = AVATAR_SIZE, parent=None):
         super().__init__(parent)
         self.entry = entry
         self.foamo_icon = foamo_icon
-        self.setFixedSize(AVATAR_SIZE, AVATAR_SIZE)
+        self._size = size
+        self.setFixedSize(size, size)
 
     def paintEvent(self, _ev):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(0, 0, AVATAR_SIZE, AVATAR_SIZE)
+        s = self._size
+        rect = QRectF(0, 0, s, s)
         if self.entry.kind == "chat":
+            # 闲聊: 圆形 + foamo.ico (无小气泡装饰, 设计稿也没有)
             path = QPainterPath()
             path.addEllipse(rect)
             p.setClipPath(path)
             if not self.foamo_icon.isNull():
-                pm = self.foamo_icon.pixmap(QSize(AVATAR_SIZE, AVATAR_SIZE))
+                pm = self.foamo_icon.pixmap(QSize(s, s))
                 p.drawPixmap(rect.toRect(), pm)
             else:
                 p.fillRect(rect, QColor("#E07A5F"))
-            # 右下角小气泡 (低调装饰)
-            p.setClipping(False)
-            p.setBrush(QColor("#F5B544"))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(QRectF(AVATAR_SIZE - 9, AVATAR_SIZE - 9, 6, 6))
         else:
+            # 项目: 圆角方块 radius **8** (design line 110), 文字色 rgba(0,0,0,0.7), font 11pt 700
             p.setBrush(QColor(self.entry.color or "#7C8290"))
             p.setPen(Qt.PenStyle.NoPen)
-            p.drawRoundedRect(rect, 10, 10)
-            f = QFont()
-            f.setPointSize(11)
-            f.setWeight(QFont.Weight.DemiBold)
-            f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.3)
+            p.drawRoundedRect(rect, 8, 8)
+            f = QFont("JetBrains Mono")
+            f.setPointSize(9)  # 28×28 内, fontSize 11 / 28 比例
+            f.setWeight(QFont.Weight.Bold)
+            f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.3)
             p.setFont(f)
-            p.setPen(QColor(255, 255, 255, 242))
+            p.setPen(QColor(0, 0, 0, 178))  # rgba(0,0,0,0.7)
             code = (self.entry.short_code or "")[:4]
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, code)
 
@@ -76,7 +116,7 @@ class ConversationCard(QFrame):
         super().__init__(parent)
         self.entry = entry
         self.theme_mgr = theme_mgr
-        self.setFixedHeight(56)
+        # 不固定高度, 让 padding + content 决定 (design padding: 9px 10px)
         self.setMouseTracking(True)
         self._selected = False
         self._hover = False
@@ -91,11 +131,12 @@ class ConversationCard(QFrame):
             self.apply_theme(theme_mgr.name)
 
     def _build(self, foamo_icon: QIcon):
+        # design padding: 9px 10px, gap 10, borderRadius 8
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 8, 12, 8)
+        layout.setContentsMargins(10, 9, 10, 9)
         layout.setSpacing(10)
-        self.avatar = AvatarWidget(self.entry, foamo_icon)
-        layout.addWidget(self.avatar)
+        self.avatar = AvatarWidget(self.entry, foamo_icon, size=28)
+        layout.addWidget(self.avatar, 0, Qt.AlignmentFlag.AlignTop)
 
         text_col = QVBoxLayout()
         text_col.setSpacing(1)
@@ -103,16 +144,19 @@ class ConversationCard(QFrame):
 
         self.label = QLabel(self.entry.name)
         f = self.label.font()
-        f.setPointSize(10)
+        f.setPointSize(10)   # design 13px / px-to-pt 约 9.75 → 用 10pt
         f.setWeight(QFont.Weight.Medium)
         self.label.setFont(f)
         text_col.addWidget(self.label)
 
         self.sub_label = QLabel(self._format_sub())
         sf = self.sub_label.font()
+        # design 11px sub, project 用 mono
         sf.setPointSize(8)
+        if self.entry.kind == "project":
+            sf.setFamily("JetBrains Mono")
         self.sub_label.setFont(sf)
-        self.sub_label.setStyleSheet("color: #9a9387;")
+        self.sub_label.setStyleSheet("color: #9a9387; background: transparent;")
         text_col.addWidget(self.sub_label)
 
         layout.addLayout(text_col, 1)
@@ -184,19 +228,41 @@ class ConversationCard(QFrame):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
-        pal = self.theme_mgr.palette if self.theme_mgr else {
-            "accent": "#7fb993", "paper": "#fafaf6",
-        }
+        name = self.theme_mgr.name if self.theme_mgr else "warm"
+        if name == "glass":
+            selected_bg = QColor(255, 255, 255, 18)
+            hover_bg = QColor(255, 255, 255, 12)
+            accent = QColor("#5ea8c9")
+        else:
+            selected_bg = QColor("#ffffff")
+            hover_bg = QColor(0, 0, 0, 10)
+            accent = QColor("#7fb993")
+
         if self._selected:
-            # white-ish bg + 3px left accent bar
-            p.fillRect(rect, QColor(pal.get("paper", "#fff")))
-            bar_h = int(rect.height() * 0.7)
-            bar_y = (rect.height() - bar_h) // 2
-            p.setBrush(QColor(pal["accent"]))
+            # design: bg #fff + boxShadow 0 1px 2px rgba(40,30,20,0.04) + radius 8
+            r = QRectF(rect)
+            path = QPainterPath()
+            path.addRoundedRect(r, 8, 8)
+            p.fillPath(path, selected_bg)
+            # 软阴影 (在 bottom 画 1px 浅线模拟)
+            if name != "glass":
+                p.setPen(QPen(QColor(40, 30, 20, 12), 1))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawLine(int(rect.left() + 4), int(rect.bottom() - 1),
+                           int(rect.right() - 4), int(rect.bottom() - 1))
+            # 左侧 accent 竖条 (design left:-8, top:10, bottom:10, width 3, radius 2)
+            # Qt 没法画到 widget 外, 改为 left:0
+            bar_top = 10
+            bar_bot = rect.height() - 10
+            p.setBrush(accent)
             p.setPen(Qt.PenStyle.NoPen)
-            p.drawRoundedRect(QRectF(0, bar_y, 3, bar_h), 1.5, 1.5)
+            p.drawRoundedRect(QRectF(0, bar_top, 3, bar_bot - bar_top), 1.5, 1.5)
         elif self._hover:
-            p.fillRect(rect, QColor(0, 0, 0, 10))
+            r = QRectF(rect)
+            path = QPainterPath()
+            path.addRoundedRect(r, 8, 8)
+            p.fillPath(path, hover_bg)
+
         if self.entry.badge != "none":
             self._paint_badge(p)
 
@@ -423,101 +489,153 @@ class Sidebar(QWidget):
         self._rebuild()
 
     def _apply_theme(self, *_args):
+        # design: sidebar 白底胶囊搜索框 + "+" 白底 + 1px border
         name = self.theme_mgr.name if self.theme_mgr is not None else "warm"
         if name == "glass":
-            bg = "rgba(22, 24, 28, 0.95)"   # opaque-ish for now (frameless)
-            search_bg = "rgba(255,255,255,0.06)"
-            search_focus = "1.5px solid #5ea8c9"
-            search_text = "#ecebe7"
-            placeholder = "color: #6e6b62;"
-            add_bg = "rgba(255,255,255,0.06)"
-            add_bg_hover = "rgba(255,255,255,0.10)"
+            bg = "rgba(22, 24, 28, 0.95)"
+            input_bg = "rgba(255,255,255,0.06)"
+            input_border = "rgba(255,255,255,0.10)"
+            input_focus = "1.5px solid #5ea8c9"
+            input_text = "#ecebe7"
+            placeholder_color = "#6e6b62"
             add_color = "#a8a59b"
             settings_color = "#ecebe7"
             settings_hover = "rgba(255,255,255,0.06)"
+            section_color = "#6e6b62"
+            sep_color = "rgba(255,255,255,0.08)"
         else:
             bg = "#f3efe6"
-            search_bg = "rgba(0,0,0,0.04)"
-            search_focus = "1.5px solid #7fb993"
-            search_text = "#1d1b16"
-            placeholder = "color: #9a9387;"
-            add_bg = "rgba(0,0,0,0.04)"
-            add_bg_hover = "rgba(0,0,0,0.08)"
+            input_bg = "#ffffff"
+            input_border = "#e8e3d6"
+            input_focus = "1.5px solid #7fb993"
+            input_text = "#1d1b16"
+            placeholder_color = "#9a9387"
             add_color = "#6b6457"
             settings_color = "#1d1b16"
-            settings_hover = "rgba(0,0,0,0.04)"
+            settings_hover = "#ffffff"
+            section_color = "#9a9387"
+            sep_color = "#e8e3d6"
 
         self.setStyleSheet(
-            f"Sidebar {{ background: {bg}; }}"
-            f" QLineEdit {{ background: {search_bg}; border: none; "
-            f"   border-radius: 16px; padding: 0 12px; "
-            f"   font-size: 12px; color: {search_text}; }}"
-            f" QLineEdit:focus {{ border: {search_focus}; }}"
-            f" QLineEdit::placeholder {{ {placeholder} }}"
+            f"Sidebar {{ background: {bg}; border-right: 1px solid {sep_color}; }}"
+            f" QLineEdit {{ background: {input_bg}; border: 1px solid {input_border}; "
+            f"   border-radius: 8px; padding: 0 10px; "
+            f"   font-size: 11pt; color: {input_text}; }}"
+            f" QLineEdit:focus {{ border: {input_focus}; }}"
         )
-        # 顶部 + 按钮
+        # placeholder 用 palette 单独设 (QLineEdit::placeholder 不是所有 Qt 版本支持)
+        if hasattr(self, "search"):
+            from PyQt6.QtGui import QPalette
+            pal = self.search.palette()
+            pal.setColor(QPalette.ColorRole.PlaceholderText, QColor(placeholder_color))
+            self.search.setPalette(pal)
+
         if hasattr(self, "add_btn"):
             self.add_btn.setStyleSheet(
-                f"QPushButton {{ background: {add_bg}; border-radius: 16px;"
-                f"  font-size: 16px; color: {add_color}; }}"
-                f"QPushButton:hover {{ background: {add_bg_hover}; }}"
+                f"QPushButton {{ background: {input_bg}; border: 1px solid {input_border};"
+                f"  border-radius: 8px; font-size: 14pt; color: {add_color}; }}"
+                f"QPushButton:hover {{ background: {settings_hover}; }}"
             )
-        # 底部设置
         if hasattr(self, "settings_btn"):
             self.settings_btn.setStyleSheet(
                 f"QPushButton {{ background: transparent; border: none; "
                 f"text-align: left; padding: 0 10px; font-size: 11pt; color: {settings_color}; }}"
                 f"QPushButton:hover {{ background: {settings_hover}; border-radius: 8px; }}"
             )
-        # 卡片文字
+        if hasattr(self, "memory_btn"):
+            self.memory_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; border: none; "
+                f"border-radius: 8px; }}"
+                f"QPushButton:hover {{ background: {settings_hover}; }}"
+            )
+        if hasattr(self, "section_label"):
+            self.section_label.setStyleSheet(
+                f"color: {section_color}; background: transparent;"
+            )
         for card in self._cards.values():
             if hasattr(card, "apply_theme"):
                 card.apply_theme(name)
 
     def _build(self):
+        # 总外 padding 0 (design aside 没 padding), 列表区单独 padding 2 8
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
-        top = QHBoxLayout()
-        top.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ----- 顶部搜索 + "+" (design padding 12 12 10) -----
+        top_wrap = QWidget()
+        top = QHBoxLayout(top_wrap)
+        top.setContentsMargins(12, 12, 12, 10)
+        top.setSpacing(8)
+
+        # 搜索框: 白底 + 1px border + radius 8 + search SVG icon
         self.search = QLineEdit(placeholderText="搜索 / 切换项目")
         self.search.setFixedHeight(32)
-        self.search.setStyleSheet(
-            "QLineEdit { background: rgba(0,0,0,0.04); border: none;"
-            " border-radius: 16px; padding: 0 12px; font-size: 12px; }"
-            "QLineEdit:focus { border: 1.5px solid #c2410c; }"
-        )
+        # 加 search icon (QLineEdit addAction)
+        from PyQt6.QtGui import QAction
+        from PyQt6.QtCore import QSize as _QSize
+        # 自绘 search icon 作 QPixmap 当 leading icon
+        try:
+            _search_icon_pm = _make_search_icon_pixmap()
+            self.search.addAction(QIcon(_search_icon_pm),
+                                  QLineEdit.ActionPosition.LeadingPosition)
+        except Exception:
+            pass
         top.addWidget(self.search, 1)
+
         self.add_btn = QPushButton("＋")
         self.add_btn.setFixedSize(32, 32)
         self.add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.add_btn.setStyleSheet(
-            "QPushButton { background: rgba(0,0,0,0.04); border-radius: 16px;"
-            " font-size: 16px; color: #555; }"
-            "QPushButton:hover { background: rgba(0,0,0,0.08); }"
-        )
         self.add_btn.clicked.connect(self.add_project_requested.emit)
         top.addWidget(self.add_btn)
-        layout.addLayout(top)
+        layout.addWidget(top_wrap)
+
+        # ----- "最近" section label -----
+        self.section_label = QLabel("最近")
+        self.section_label.setContentsMargins(16, 6, 16, 4)
+        slf = self.section_label.font()
+        slf.setPointSize(7)
+        slf.setWeight(QFont.Weight.DemiBold)
+        slf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
+        slf.setCapitalization(QFont.Capitalization.AllUppercase)
+        self.section_label.setFont(slf)
+        self.section_label.setStyleSheet("color: #9a9387;")
+        layout.addWidget(self.section_label)
+
+        # ----- 卡片列表 (design padding 2 8, gap 1) -----
         self.card_area = QVBoxLayout()
-        self.card_area.setSpacing(6)
-        self.card_area.setContentsMargins(0, 4, 0, 0)
+        self.card_area.setSpacing(1)
+        self.card_area.setContentsMargins(8, 2, 8, 2)
         layout.addLayout(self.card_area)
+
         layout.addStretch(1)
-        # Footer (Task VR5): settings button
-        footer_row = QHBoxLayout()
-        footer_row.setContentsMargins(0, 4, 0, 0)
+
+        # ----- footer: 设置 + 记忆 icon (design borderTop, padding 8 10) -----
+        footer_sep = QFrame()
+        footer_sep.setFrameShape(QFrame.Shape.HLine)
+        footer_sep.setStyleSheet("background: #e8e3d6; max-height: 1px;")
+        layout.addWidget(footer_sep)
+
+        footer_wrap = QWidget()
+        footer_row = QHBoxLayout(footer_wrap)
+        footer_row.setContentsMargins(10, 8, 10, 8)
+        footer_row.setSpacing(4)
         self.settings_btn = QPushButton("⚙  设置")
         self.settings_btn.setFixedHeight(32)
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.settings_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none; "
-            "text-align: left; padding: 0 10px; font-size: 11pt; color: #1d1b16; }"
-            "QPushButton:hover { background: rgba(0,0,0,0.04); border-radius: 8px; }"
-        )
-        footer_row.addWidget(self.settings_btn)
-        footer_row.addStretch(1)
-        layout.addLayout(footer_row)
+        footer_row.addWidget(self.settings_btn, 1)
+        # 记忆 icon (大脑 svg 装饰按钮)
+        self.memory_btn = QPushButton()
+        self.memory_btn.setFixedSize(32, 32)
+        self.memory_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.memory_btn.setToolTip("泡沫 · 记忆")
+        try:
+            self.memory_btn.setIcon(QIcon(_make_brain_icon_pixmap()))
+            self.memory_btn.setIconSize(_QSize(15, 15))
+        except Exception:
+            self.memory_btn.setText("脑")
+        footer_row.addWidget(self.memory_btn)
+        layout.addWidget(footer_wrap)
 
     def _rebuild(self, *_args):
         for c in list(self._cards.values()):

@@ -999,14 +999,26 @@ class Bubble(QLabel):
         if self.role == "user":
             bg = colors["bubble_user_bg"]
             fg = colors["bubble_user_fg"]
+            # 设计 line 311: '14px 14px 4px 14px' (右下尖角)
+            corners = ("border-top-left-radius: 14px; "
+                       "border-top-right-radius: 14px; "
+                       "border-bottom-right-radius: 4px; "
+                       "border-bottom-left-radius: 14px;")
+            border_extra = "border: 1px solid #c4dccb;"
         else:
             bg = colors["bubble_asst_bg"]
             fg = colors["bubble_asst_fg"]
+            # 设计 line 327: '14px 14px 14px 4px' (左下尖角)
+            corners = ("border-top-left-radius: 14px; "
+                       "border-top-right-radius: 14px; "
+                       "border-bottom-right-radius: 14px; "
+                       "border-bottom-left-radius: 4px;")
+            border_extra = "border: 1px solid #e8e3d6;"
         self._fg = fg
         self._theme_name = theme_name
         self.setStyleSheet(
-            f"background: {bg}; border-radius: 6px; "
-            f"padding: 7px 11px; font-size: 12px; color: {fg};"
+            f"background: {bg}; {corners} {border_extra} "
+            f"padding: 9px 14px; font-size: 12px; color: {fg};"
         )
         # 已 finalize 的助手消息用 RichText 渲染, markdown 里嵌了
         # 颜色 (标题/code), 切主题后要重渲染才能跟上
@@ -3056,10 +3068,23 @@ class ChatWindow(QWidget):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        if not self.isMaximized():
-            self._apply_rounded_mask()
-        else:
+        # 一律重设 mask: maximized 时 mask 也 ok (Win 自己处理边缘)
+        # 之前 isMaximized 分支会让 maximized 时 clearMask, 但 showNormal 后
+        # resizeEvent 跑得太早, isMaximized 还可能是 True, 导致 mask 不恢复 → 圆角丢
+        if self.isMaximized():
             self.clearMask()
+        else:
+            self._apply_rounded_mask()
+
+    def changeEvent(self, e):
+        """maximize ↔ showNormal 切换时, mask 跟着. Qt resizeEvent 时序不稳, 这里兜底."""
+        super().changeEvent(e)
+        from PyQt6.QtCore import QEvent
+        if e.type() == QEvent.Type.WindowStateChange:
+            if self.isMaximized():
+                self.clearMask()
+            else:
+                self._apply_rounded_mask()
 
     def showEvent(self, e):
         super().showEvent(e)

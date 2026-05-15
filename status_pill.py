@@ -60,6 +60,8 @@ class StatusPill(QWidget):
         super().__init__(parent)
         self.state: State = state if state in _TEXT else "idle"
         self.setFixedHeight(22)
+        # 关键: 让 QWidget 自己绘制 stylesheet 的 background, 否则 class selector 无效
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         h = QHBoxLayout(self)
         h.setContentsMargins(8, 0, 9, 0)
         h.setSpacing(6)
@@ -82,9 +84,13 @@ class StatusPill(QWidget):
 
     def _apply_style(self):
         self.label.setStyleSheet(
-            f"color: {_FG[self.state]}; font-size: 9pt; font-weight: 500;"
+            f"color: {_FG[self.state]}; font-size: 9pt; font-weight: 500; "
+            f"background: transparent; border: none;"
         )
+        # design line 122: borderRadius: 999 → 真胶囊形
+        # Qt 用大半径 + 实际 height 22, radius 11 也行, 但为了 dark mode 不漏边
+        # 显式锁定 radius = height/2
         self.setStyleSheet(
             "StatusPill { background: white; border: 1px solid #e8e3d6; "
-            "border-radius: 11px; }"
+            "border-radius: 11px; padding: 0px; }"
         )
