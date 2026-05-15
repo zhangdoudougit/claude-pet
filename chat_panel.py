@@ -311,6 +311,13 @@ class ConversationPanel(QWidget):
         self.bubble_layout.insertWidget(self.bubble_layout.count() - 1, notice)
         self.store.set_badge(self.entry.key, "none")
         self.status_label.setText("· 错误")
+        # Stop the thinking spinner before dropping the reference (the Bubble
+        # owns a QTimer that keeps ticking if we just null the ref).
+        if self._current_bubble is not None and hasattr(self._current_bubble, "set_thinking"):
+            try:
+                self._current_bubble.set_thinking(False)
+            except Exception:
+                pass
         # Clear per-turn state so a late stale chunk doesn't latch onto an
         # orphaned bubble.
         self._tool_strip = None

@@ -18,7 +18,7 @@ class PermissionRouter(QObject):
 
     Signal contract:
         permission_requested(conv_key: str, payload: dict, responder: callable)
-        — responder 接收一个 'allow' / 'deny' / 'cancel' 字符串
+        — responder 接收 'allow' / 'deny' 字符串
         started — 监听成功
         start_failed(error_msg: str) — 监听失败, hook 端会自动降级
     """
