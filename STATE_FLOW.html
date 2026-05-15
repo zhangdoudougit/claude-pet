@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>泡沫 · 状态逻辑流程图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #14142a;
+    --panel: #1f1f3a;
+    --panel-2: #2a2a4a;
+    --border: #3a3a5a;
+    --text: #ede5dd;
+    --muted: #c8c0d6;
+    --idle:    #b39ddb;
+    --tender:  #b39ddb;
+    --focused: #4dd0e1;
+    --happy:   #ff7eb6;
+    --worried: #ffb74d;
+    --proud:   #ffd54f;
+    --danger:  #ff6b6b;
+    --jealous: #c792ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+    line-height: 1.55;
+  }
+  header {
+    padding: 28px 40px 14px;
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(circle at 18% 0%, rgba(179,157,219,0.18), transparent 50%),
+      radial-gradient(circle at 80% 0%, rgba(77,208,225,0.10), transparent 55%);
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 26px;
+    letter-spacing: 1px;
+  }
+  header h1 .accent { color: var(--idle); }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .meta { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  header .meta code {
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: #cfe9ef;
+  }
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 18px 28px 60px;
+  }
+  section {
+    margin-top: 36px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 26px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  }
+  section h2 {
+    margin: 0 0 4px;
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section h2 .tag {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-weight: normal;
+  }
+  section .desc { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0,1.5fr) minmax(280px,1fr);
+    gap: 22px;
+    align-items: start;
+  }
+  @media (max-width: 980px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .mermaid-wrap {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    overflow-x: auto;
+  }
+  .mermaid { font-size: 14px; }
+
+  aside.lines {
+    background: linear-gradient(180deg, var(--panel-2), #232342);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  aside.lines h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  aside.lines h3 .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .bucket { margin-bottom: 14px; }
+  .bucket:last-child { margin-bottom: 0; }
+  .bucket .label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bucket .swatch {
+    width: 10px; height: 10px; border-radius: 2px;
+  }
+  .bucket ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-left: 2px solid var(--border);
+  }
+  .bucket li {
+    padding: 4px 10px;
+    font-size: 13px;
+    color: var(--text);
+    position: relative;
+  }
+  .bucket li::before {
+    content: '"';
+    color: var(--muted);
+    margin-right: 2px;
+  }
+  .bucket li::after {
+    content: '"';
+    color: var(--muted);
+    margin-left: 2px;
+  }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 8px;
+  }
+  .legend span {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .badge-idle    { background: rgba(179,157,219,0.18); color: var(--idle); }
+  .badge-focused { background: rgba(77,208,225,0.18);  color: var(--focused); }
+  .badge-happy   { background: rgba(255,126,182,0.18); color: var(--happy); }
+  .badge-worried { background: rgba(255,183,77,0.18);  color: var(--worried); }
+  .badge-proud   { background: rgba(255,213,79,0.18);  color: var(--proud); }
+  .badge-danger  { background: rgba(255,107,107,0.20); color: var(--danger); }
+  .badge-jealous { background: rgba(199,146,234,0.18); color: var(--jealous); }
+
+  table.params {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  table.params th, table.params td {
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    text-align: left;
+  }
+  table.params th {
+    color: var(--muted);
+    font-weight: normal;
+    font-size: 12px;
+  }
+  table.params code {
+    background: rgba(0,0,0,0.25);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #cfe9ef;
+  }
+
+  .pill-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 8px;
+  }
+  .pill-row code {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    color: #cfe9ef;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 30px 20px 0;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>泡沫 <span class="accent">·</span> 状态切换逻辑</h1>
+  <div class="sub">监听 Claude Code 会话流 → 关键词 + 上下文 → 状态 / 台词</div>
+  <div class="meta">
+    源码: <code>foamo_pet.py</code> · <code>journal.py</code> · <code>context.py</code>
+    &nbsp;|&nbsp; 数据库: <code>~/.foamo_pet/log.db</code>
+    &nbsp;|&nbsp; 监听: <code>~/.claude/projects/**/*.jsonl</code>
+  </div>
+  <div class="legend">
+    <span class="badge-idle">idle / tender</span>
+    <span class="badge-focused">focused</span>
+    <span class="badge-happy">happy</span>
+    <span class="badge-worried">worried</span>
+    <span class="badge-proud">proud</span>
+    <span class="badge-danger">_danger (新)</span>
+    <span class="badge-jealous">_jealous</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================ -->
+<section>
+  <h2>1. 主路径 <span class="tag">jsonl 增量 → state_changed</span></h2>
+  <p class="desc">每秒轮询所有 jsonl 文件大小, 只读新增文本; 提取 user / assistant 消息后送入状态机做三层处理: 关键词 → 上下文重映射 → 频控.</p>
+  <div class="grid">
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TD
+    Start([ClaudeLogWatcher · 1Hz<br/>~/.claude/projects/**/*.jsonl])
+    Start --> Extract[_extract_text<br/>抓 user/assistant + tool_use]
+    Extract -->|有文本| Sig1[text_detected signal]
+    Extract -->|无文本| Drop1([忽略])
+    Sig1 --> DA[StateManager.detect_and_apply text]
+
+    DA --> Locked{locked?<br/>番茄钟期间}
+    Locked -->|是| Drop2([冻结 · 忽略])
+    Locked -->|否| KW{KEYWORD_RULES<br/>正则按序匹配}
+
+    KW -->|无命中| Drop3([忽略])
+    KW -->|_danger 新| D[切 worried<br/>line ← _danger 桶]
+    KW -->|_jealous| J[切 tender<br/>line ← _jealous 桶]
+    KW -->|worried| Wo[new_state=worried]
+    KW -->|happy| Ha[new_state=happy]
+    KW -->|proud| Pr[new_state=proud]
+    KW -->|focused| Fo[new_state=focused]
+
+    Wo --> ErrMem{错误模式记忆 新<br/>提取 ExceptionType}
+    ErrMem -->|本周累计 ≥ 3| Fam[line ← _familiar_error<br/>'本周第 N 次了']
+    ErrMem -->|首次或 < 3| Ctx
+    Fam --> Ctx
+    Ha --> Ctx
+    Pr --> Ctx
+    Fo --> Ctx
+    D --> Ctx
+    J --> Ctx
+
+    Ctx{is_late_night<br/>+ worried?}
+    Ctx -->|是| Rewrite[重写 tender<br/>line ← _late_worried 若空]
+    Ctx -->|否| LF
+    Rewrite --> LF
+
+    LF{focused +<br/>long_focus 一次性}
+    LF -->|是| LFLine[line ← _long_focus]
+    LF -->|否| Th
+    LFLine --> Th
+
+    Th{频控<br/>同态 < 3s · 5s 内 ≥ 3 次}
+    Th -->|跳过| Drop4([忽略])
+    Th -->|通过| Apply[_set_state]
+    Apply --> Out[state_changed.emit<br/>→ Widget 切 GIF + 气泡<br/>→ Journal 写日志]
+</pre>
+    </div>
+    <aside class="lines">
+      <h3><span class="dot" style="background:var(--idle)"></span>对应台词桶</h3>
+      <div class="bucket">
+        <div class="label"><span class="swatch" style="background:var(--idle)"></span>idle</div>
+        <ul>
+          <li>豆哥在干嘛~</li>
+          <li>本泡沫在看着哦</li>
+          <li>嗯哼~</li>
+          <li>...</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label"><span class="swatch" style="background:var(--focused)"></span>focused</div>
+        <ul>
+          <li>豆哥在认真!</li>
+          <li>嘘,别打扰...</li>
+          <li>稳住,稳住</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label"><span class="swatch" style="background:var(--happy)"></span>happy</div>
+        <ul>
+          <li>嘿嘿搞定啦~</li>
+          <li>本泡沫真厉害!</li>
+          <li>啵啵啵~</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label"><span class="swatch" style="background:var(--proud)"></span>proud</div>
+        <ul>
+          <li>哼,小事一桩</li>
+          <li>本泡沫的功劳~</li>
+          <li>嘁,这才哪到哪</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label"><span class="swatch" style="background:var(--worried)"></span>worried</div>
+        <ul>
+          <li>豆哥别慌!</li>
+          <li>...一起想办法</li>
+          <li>深呼吸,深呼吸</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section>
+  <h2>2. 危险命令哨兵 <span class="tag">_danger · NEW</span></h2>
+  <p class="desc">监听 assistant 工具调用里的命令字符串; 命中即切 worried + 警示台词. 优先级最高, 在 _jealous 之前匹配. 不真拦截, 仅本地反应.</p>
+  <div class="grid">
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TD
+    A[新文本进入 detect_and_apply] --> B{DANGER_PATTERN<br/>匹配?}
+    B -->|否| Skip([跳过 → 走常规 KEYWORD])
+    B -->|是| C[new_state = _danger]
+    C --> D[重写 worried<br/>line ← _danger 桶]
+    D --> E[跳过错误模式 / 深夜重映射<br/>因为 line 已设]
+    E --> F[频控判断]
+    F -->|通过| G[Widget 切 worried GIF<br/>+ 警示气泡]
+    F -->|跳过| Drop([忽略])
+</pre>
+      <div class="pill-row" style="margin-top:14px">
+        <code>rm -rf</code>
+        <code>git reset --hard</code>
+        <code>git push --force / -f</code>
+        <code>git clean -fdx</code>
+        <code>DROP TABLE / DATABASE</code>
+        <code>TRUNCATE TABLE</code>
+        <code>DELETE FROM ... 无 WHERE</code>
+        <code>shutdown -h / reboot</code>
+        <code>mkfs.* / dd if=</code>
+        <code>--no-verify (跳 hook)</code>
+      </div>
+    </div>
+    <aside class="lines">
+      <h3><span class="dot" style="background:var(--danger)"></span>_danger 台词桶</h3>
+      <div class="bucket">
+        <div class="label"><span class="swatch" style="background:var(--danger)"></span>触发瞬间</div>
+        <ul>
+          <li>豆哥豆哥豆哥——这条命令再确认一下</li>
+          <li>...等等,这个不可逆的</li>
+          <li>本泡沫举个手:这条命令真要跑?</li>
+          <li>豆哥,看一眼路径再回车</li>
+          <li>(屏住呼吸) 你确定?</li>
+          <li>...这种命令,本泡沫多嘴一次。</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">触发后视觉</div>
+        <ul>
+          <li>状态条变橙黄 (worried 色)</li>
+          <li>角色切 worried.gif</li>
+          <li>气泡边框变橙</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section>
+  <h2>3. 错误模式记忆 <span class="tag">_familiar_error · NEW</span></h2>
+  <p class="desc">命中 worried 时, 从文本抓 ExceptionType (KeyError/TypeError/...) 写入 SQLite, 同一指纹本周累计 ≥3 次, 把台词换成"老朋友又来了"风格的吐槽.</p>
+  <div class="grid">
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TD
+    A[KEYWORD_RULES 命中 worried] --> B{journal 已注入<br/>且 line 仍空}
+    B -->|否| End1([常规走 worried 桶])
+    B -->|是| C[ERROR_FINGERPRINT_PATTERN<br/>抓 \\b\\w+(Error/Exception/Warning)\\b]
+    C -->|无命中| End2([常规走 worried 桶])
+    C -->|命中| D["fingerprint = py:KeyError"]
+    D --> E[journal.record_error<br/>INSERT into error_patterns]
+    E --> F[查本周累计 N]
+    F -->|N &lt; 3| End3([常规走 worried 桶])
+    F -->|N ≥ 3| G[line ← _familiar_error<br/>套 .format n=N]
+    G --> H[继续深夜重映射 → 频控]
+    H --> I[Widget: worried GIF<br/>气泡显本周第 N 次]
+</pre>
+      <div style="margin-top:14px;">
+        <h3 style="font-size:13px;color:var(--muted);margin:0 0 8px">SQLite Schema</h3>
+<pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:6px;border:1px solid var(--border);font-size:12px;color:#cfe9ef;margin:0;overflow:auto">CREATE TABLE error_patterns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  project TEXT
+);
+CREATE INDEX idx_err_fp_ts ON error_patterns(fingerprint, ts);</pre>
+      </div>
+    </div>
+    <aside class="lines">
+      <h3><span class="dot" style="background:var(--worried)"></span>_familiar_error 台词桶</h3>
+      <div class="bucket">
+        <div class="label">N ≥ 3 时改写</div>
+        <ul>
+          <li>...这熟悉的味道,本周第 {n} 次了</li>
+          <li>嗯?又是它。本周第 {n} 次见面</li>
+          <li>豆哥豆哥,这个错本周已经第 {n} 次,要不要根治一下</li>
+          <li>(掏小本本) 第 {n} 次,记下来了</li>
+          <li>...老朋友又来了。第 {n} 次</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">指纹示例</div>
+        <ul>
+          <li>py:KeyError</li>
+          <li>py:TypeError</li>
+          <li>py:ConnectionError</li>
+          <li>py:ValueError</li>
+          <li>py:RuntimeError</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section>
+  <h2>4. 副路径 · 安静期闲聊 <span class="tag">IdleTimer 45s</span></h2>
+  <p class="desc">没有外部触发也会自言自语. 距上次状态变更 60s 以上才动嘴.</p>
+  <div class="grid">
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TD
+    Tick([IdleTimer · 每 45s]) --> L{locked?}
+    L -->|是| S1([跳过])
+    L -->|否| Q{距上次变更 &gt; 60s?}
+    Q -->|否| S2([跳过])
+    Q -->|是| P{time_period}
+    P -->|morning + 今日尚未问候| Mo[idle + _morning<br/>记 today 一天一次]
+    P -->|late_night| LN[tender + _late]
+    P -->|day / evening| Idle{activity.is_idle?}
+    Idle -->|是| IQ[tender + _idle_quiet]
+    Idle -->|否| RND[50/50 随机 idle/tender]
+    Mo --> Out[state_changed.emit]
+    LN --> Out
+    IQ --> Out
+    RND --> Out
+</pre>
+    </div>
+    <aside class="lines">
+      <h3><span class="dot" style="background:var(--idle)"></span>闲聊台词桶</h3>
+      <div class="bucket">
+        <div class="label">_morning · 一天一次</div>
+        <ul>
+          <li>豆哥早呀~</li>
+          <li>今天又要一起搞事情</li>
+          <li>嗯,今天的咖啡香么</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">_late · 深夜 23:00-04:59</div>
+        <ul>
+          <li>...都几点了豆哥</li>
+          <li>嘘——晚了。</li>
+          <li>凌晨两点的豆哥,不会比平时多写一行好代码</li>
+          <li>你这小子...</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">_idle_quiet · 长空闲</div>
+        <ul>
+          <li>...</li>
+          <li>(在的)</li>
+          <li>本泡沫等着呢</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">_late_worried · 深夜遇错</div>
+        <ul>
+          <li>豆哥,这种时候别死磕了</li>
+          <li>停。明天清醒点再看,不就这一段代码么</li>
+          <li>...深夜的报错,有一半是困出来的</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">_long_focus · 连续 1h+</div>
+        <ul>
+          <li>豆哥,水。</li>
+          <li>肩膀。靠在椅背上一下。</li>
+          <li>已经一个钟头了——眼睛会酸的</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section>
+  <h2>5. 番茄钟旁路 <span class="tag">PomodoroController</span></h2>
+  <p class="desc">右键启动后状态机 lock 25 分钟, 期间所有 detect_and_apply 输入直接丢弃, Widget 持续显倒计时.</p>
+  <div class="grid">
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart LR
+    A([右键 · 开始番茄钟]) --> B[state_mgr.lock 'pomodoro']
+    B --> C[_set_state focused<br/>line ← _pomodoro_start]
+    C --> D[QTimer 1Hz 倒计时<br/>Widget 显 🍅 mm:ss]
+    D -->|25 分钟到| E[_set_state happy<br/>line ← _pomodoro_finish<br/>journal completed=1]
+    D -->|手动取消| F[_set_state tender<br/>line ← _pomodoro_cancel<br/>journal completed=0]
+    E --> G[unlock]
+    F --> G
+</pre>
+    </div>
+    <aside class="lines">
+      <h3><span class="dot" style="background:var(--focused)"></span>番茄钟台词桶</h3>
+      <div class="bucket">
+        <div class="label">_pomodoro_start</div>
+        <ul>
+          <li>25 分钟,本泡沫陪豆哥到底</li>
+          <li>嘘——专注模式开了</li>
+          <li>记下来了。这一会儿不准看手机</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">_pomodoro_finish</div>
+        <ul>
+          <li>搞定 25 分钟!豆哥棒棒~</li>
+          <li>啵——一个番茄。歇会儿吧</li>
+          <li>本泡沫看着豆哥这 25 分钟没摸鱼,嗯</li>
+        </ul>
+      </div>
+      <div class="bucket">
+        <div class="label">_pomodoro_cancel</div>
+        <ul>
+          <li>...好吧,中断就中断</li>
+          <li>嗯,先放着,本泡沫不勉强豆哥</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section>
+  <h2>6. 占有欲彩蛋 <span class="tag">_jealous</span></h2>
+  <p class="desc">豆哥在会话里提到别家 AI, 泡沫切 tender + 酸味台词. 是种克制的小情绪.</p>
+  <div class="grid">
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart LR
+    A[文本含 ChatGPT/Gemini/Cursor/Copilot/<br/>Codex/OpenAI/Anthropic/文心/通义/豆包/kimi] --> B[new_state = _jealous]
+    B --> C[重写 tender<br/>line ← _jealous 桶]
+    C --> D[Widget: tender GIF<br/>气泡显酸味台词]
+</pre>
+    </div>
+    <aside class="lines">
+      <h3><span class="dot" style="background:var(--jealous)"></span>_jealous 台词桶</h3>
+      <div class="bucket">
+        <div class="label">触发瞬间</div>
+        <ul>
+          <li>...问就问。本泡沫又不会拦你。</li>
+          <li>哼,他能比本泡沫更懂 SmartPLC?</li>
+          <li>去问吧去问吧。</li>
+          <li>...是不是又在和别人说话</li>
+          <li>豆哥...不是只有本泡沫一个么</li>
+          <li>(微妙地酸了一下)</li>
+          <li>嘁,本泡沫先休息会儿,豆哥忙</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section>
+  <h2>7. 关键参数 / 信号流</h2>
+  <div class="grid">
+    <div>
+      <table class="params">
+        <thead><tr><th>参数</th><th>值</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>MIN_STATE_HOLD</code></td><td>3.0 s</td><td>同状态最小保持时间</td></tr>
+          <tr><td><code>MAX_STATE_CHANGES_5S</code></td><td>3</td><td>5s 内最多状态切换次数</td></tr>
+          <tr><td>闲聊周期</td><td>45 s</td><td>IdleTimer 触发频率</td></tr>
+          <tr><td>闲聊门槛</td><td>60 s</td><td>距上次状态变更需 &gt;60s 才闲聊</td></tr>
+          <tr><td><code>POMODORO_DURATION_S</code></td><td>25 min</td><td>番茄钟时长</td></tr>
+          <tr><td>Watcher 轮询</td><td>1 Hz</td><td>jsonl 增量扫描间隔</td></tr>
+          <tr><td><code>LONG_FOCUS_SECONDS</code></td><td>60 min</td><td>触发 _long_focus 的连续活动阈值</td></tr>
+          <tr><td><code>IDLE_THRESHOLD_SECONDS</code></td><td>30 min</td><td>activity.is_idle 阈值</td></tr>
+          <tr><td>错误模式阈值</td><td>3 次/周</td><td>命中 _familiar_error 改写台词</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart LR
+    Watcher[ClaudeLogWatcher] -->|text_detected| SM[StateManager]
+    Watcher -->|text_detected| Act[ActivityTracker.mark_active]
+    Watcher -->|jsonl_active| PI[ProjectIdentifier]
+
+    SM -->|state_changed| Widget[FoamoWidget · GIF + 气泡]
+    SM -->|state_changed| Journal[Journal · events]
+    SM -->|record_error| ErrTbl[Journal · error_patterns 新]
+
+    Pom[PomodoroController] -->|lock/unlock| SM
+    Pom -.直接调用.-> Widget
+
+    Reporter[WeeklyReporter] -->|report_ready| Tray[FoamoTray · toast]
+    Reporter -->|report_ready| SM
+</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  泡沫的内核 · 由 jsonl 喂养 · 由 SQLite 记忆
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#1f1f3a',
+      primaryColor: '#2a2a4a',
+      primaryTextColor: '#ede5dd',
+      primaryBorderColor: '#7e5bb8',
+      lineColor: '#8a82a8',
+      secondaryColor: '#3a3a5a',
+      tertiaryColor: '#252544',
+      fontFamily: '"Microsoft YaHei", "PingFang SC", sans-serif'
+    },
+    flowchart: { curve: 'basis', padding: 14 }
+  });
+</script>
+</body>
+</html>

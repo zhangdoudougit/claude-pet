@@ -1,0 +1,50 @@
+# 私人状态目录 (session/history/proxy/avatar/log) — 一律不提交
+.chat_state/
+
+# 已废弃的 web 版聊天 (Native ChatPanel 替代了它)
+chat_ui/
+
+# 依赖安装标记
+.deps_installed
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+
+# 备份目录
+assets_bak/
+preview/
+
+# 打包产物
+build/
+dist/
+*.spec
+!.github/
+
+# Claude Code 本地缓存 (不该混进开源项目)
+.claude/
+
+# 用户头像 (隐私) — .chat_state 已经排除, 这里再保险
+foamo.local.ico

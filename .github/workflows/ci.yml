@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  syntax:
+    name: 语法检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: py_compile 所有源文件
+        run: |
+          python -m py_compile \
+            foamo_pet.py \
+            chat_window.py \
+            permission_dialog.py \
+            context.py \
+            journal.py \
+            make_icon.py
+
+  smoke-import:
+    name: 模块 import 烟测
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 装依赖 (含 PyQt6 系统库)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qqy \
+            libxcb-cursor0 libxkbcommon-x11-0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0
+          pip install -r requirements.txt
+
+      - name: import 各模块 (无 GUI display)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -c "import context, journal"
+          python -c "from chat_window import md_to_html, _resolve_proxy; print('chat_window OK')"
+          python -c "import permission_dialog; print('permission_dialog OK')"
