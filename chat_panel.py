@@ -133,20 +133,87 @@ class ConversationPanel(QWidget):
         self.scroll.setWidget(self.bubble_container)
         v.addWidget(self.scroll, 1)
 
-        # Input row
-        ibar = QHBoxLayout()
-        ibar.setContentsMargins(8, 4, 8, 8)
-        ibar.setSpacing(6)
+        # Composer (Task VR7): rounded card + toolbar
+        composer_card = QFrame()
+        composer_card.setObjectName("composer_card")
+        composer_card.setStyleSheet(
+            "QFrame#composer_card { background: #fff; "
+            "border: 1px solid #e8e3d6; border-radius: 12px; }"
+        )
+        cv = QVBoxLayout(composer_card)
+        cv.setContentsMargins(10, 8, 10, 6)
+        cv.setSpacing(6)
 
         self.input = ChatInput()
-        self.input.setFixedHeight(72)
-        ibar.addWidget(self.input, 1)
+        self.input.setFixedHeight(44)
+        self.input.setPlaceholderText("和泡沫说点什么…")
+        self.input.setStyleSheet(
+            "QPlainTextEdit { background: transparent; border: none; "
+            "font-size: 11pt; color: #1d1b16; padding: 0; }"
+        )
+        cv.addWidget(self.input)
+
+        # Toolbar separator (dashed line)
+        sep_line = QFrame()
+        sep_line.setFixedHeight(1)
+        sep_line.setStyleSheet(
+            "QFrame { background: transparent; border-top: 1px dashed #f0ebdd; }"
+        )
+        cv.addWidget(sep_line)
+
+        # Toolbar
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(4)
+        toolbar.setContentsMargins(0, 4, 0, 0)
+
+        def _tool_btn(label: str, tooltip: str) -> QPushButton:
+            b = QPushButton(label)
+            b.setFixedSize(28, 24)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setToolTip(tooltip)
+            b.setStyleSheet(
+                "QPushButton { background: transparent; border: none; "
+                "color: #6b6457; font-size: 10pt; padding: 0; }"
+                "QPushButton:hover { background: rgba(0,0,0,0.04); "
+                "border-radius: 4px; }"
+            )
+            return b
+
+        self.tool_attach_btn = _tool_btn("📎", "附件 (尚未接入)")
+        self.tool_mention_btn = _tool_btn("@", "@ 提及 (尚未接入)")
+        self.tool_code_btn = _tool_btn("</>", "代码块 (尚未接入)")
+        toolbar.addWidget(self.tool_attach_btn)
+        toolbar.addWidget(self.tool_mention_btn)
+        toolbar.addWidget(self.tool_code_btn)
+        toolbar.addStretch(1)
+
+        self.kbd_hint = QLabel("↵ 发送 · ⇧↵ 换行")
+        kf = self.kbd_hint.font()
+        kf.setPointSize(8)
+        self.kbd_hint.setFont(kf)
+        self.kbd_hint.setStyleSheet("color: #9a9387; margin-right: 8px;")
+        toolbar.addWidget(self.kbd_hint)
 
         self.send_btn = QPushButton("发送")
+        self.send_btn.setFixedHeight(28)
+        self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_btn.setStyleSheet(
+            "QPushButton { background: #7fb993; color: #fff; border: none; "
+            "border-radius: 8px; padding: 0 14px; font-size: 9.5pt; "
+            "font-weight: 600; }"
+            "QPushButton:hover { background: #6fa882; }"
+            "QPushButton:disabled { background: #c9c2b2; }"
+        )
         self.send_btn.clicked.connect(self._on_send_clicked)
-        ibar.addWidget(self.send_btn)
+        toolbar.addWidget(self.send_btn)
 
-        v.addLayout(ibar)
+        cv.addLayout(toolbar)
+
+        # Outer: padding around composer card
+        outer_composer = QHBoxLayout()
+        outer_composer.setContentsMargins(22, 12, 22, 16)
+        outer_composer.addWidget(composer_card)
+        v.addLayout(outer_composer)
 
     # --------------------------------------------------------- worker wiring --
 

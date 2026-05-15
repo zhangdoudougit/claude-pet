@@ -97,3 +97,22 @@ def test_panel_has_redesigned_header(tmp_path, qapp, qtbot):
     assert isinstance(panel.header_avatar, PetAvatar)
     assert isinstance(panel.status_pill, StatusPill)
     assert panel.mood_line.text().startswith("正在和你")
+
+
+def test_composer_has_toolbar_buttons(tmp_path, qapp, qtbot):
+    from conversation_store import ConversationStore
+    from claude_worker import ClaudeWorker
+    from chat_panel import ConversationPanel
+    store = ConversationStore(state_dir=tmp_path)
+    entry = store.get("chat")
+    conv_dir = tmp_path / "conv" / "chat"
+    conv_dir.mkdir(parents=True, exist_ok=True)
+    worker = ClaudeWorker("chat", conv_dir, "claude", str(tmp_path))
+    panel = ConversationPanel(entry, store, worker)
+    qtbot.addWidget(panel)
+    assert hasattr(panel, "tool_attach_btn")
+    assert hasattr(panel, "tool_mention_btn")
+    assert hasattr(panel, "tool_code_btn")
+    assert hasattr(panel, "kbd_hint")
+    assert "↵" in panel.kbd_hint.text()
+    assert "发送" in panel.send_btn.text()
