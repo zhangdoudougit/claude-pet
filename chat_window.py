@@ -3108,6 +3108,17 @@ class ChatWindow(QWidget):
         if entry is not None and entry.badge == "permission":
             self.store.set_badge(conv_key, "none")
 
+    # ---------- public helpers ----------
+
+    def toggle(self):
+        """Show / hide. Convenience for FoamoWidget.open_chat to call."""
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+
 
 # ---------------- 单跑测试 ----------------
 if __name__ == "__main__":

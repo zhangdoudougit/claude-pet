@@ -1647,16 +1647,15 @@ class FoamoWidget(QWidget):
         self.show()
 
     def open_chat(self):
-        """切换聊天面板 (附着在桌宠旁边, 懒加载)"""
+        """切换聊天面板 (独立窗口, 懒加载, 不再贴着桌宠跟随)"""
         if self._chat_window is None:
             try:
-                from chat_window import ChatPanel
+                from chat_window import ChatWindow
             except Exception as e:
                 from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.warning(self, "聊天框启不来", f"加载 chat_window 失败:\n{e}")
                 return
-            self._chat_window = ChatPanel()
-            self._chat_window.attach_to(self)
+            self._chat_window = ChatWindow()
         self._chat_window.toggle()
 
     # ============================================================
