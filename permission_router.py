@@ -50,13 +50,22 @@ class PermissionRouter(QObject):
         socket = self._server.nextPendingConnection()
         if socket is None:
             return
-        # hold the socket alive on self until response sent; use partial
-        socket.readyRead.connect(lambda s=socket: self._handle_socket(s))
+        # 每个 connection 只 dispatch 一次, 避免 chunked read 时 readyRead 多触发.
+        handled = {"v": False}
+
+        def on_ready():
+            if handled["v"]:
+                return
+            # 等待对端写完一整条 JSON (我们的协议: 一条 JSON 一次写入)
+            if socket.bytesAvailable() == 0:
+                return
+            handled["v"] = True
+            self._handle_socket(socket)
+
+        socket.readyRead.connect(on_ready)
         socket.disconnected.connect(socket.deleteLater)
 
     def _handle_socket(self, socket: QLocalSocket):
-        if socket.bytesAvailable() == 0:
-            return
         raw = bytes(socket.readAll()).decode("utf-8", errors="replace")
         try:
             req = json.loads(raw)
@@ -82,8 +91,6 @@ class PermissionRouter(QObject):
         try:
             socket.write(json.dumps(msg).encode("utf-8"))
             socket.flush()
-            # 给对端一点时间读出来再关
-            socket.waitForBytesWritten(500)
             socket.disconnectFromServer()
         except Exception:
             pass

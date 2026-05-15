@@ -35,11 +35,9 @@ def _try_route_via_socket(tool_name: str, tool_input: dict, cwd: str) -> str | N
         return None
 
     # QLocalSocket needs a QCoreApplication instance for the event loop.
-    app = QCoreApplication.instance()
-    owned_app = False
-    if app is None:
-        app = QCoreApplication(sys.argv)
-        owned_app = True
+    # hook 进程在 main() 返回时整体退出, 不用主动清理 app.
+    if QCoreApplication.instance() is None:
+        QCoreApplication(sys.argv)
 
     socket = QLocalSocket()
     socket.connectToServer("foamo_perm_v1")
