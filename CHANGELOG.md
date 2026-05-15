@@ -2,6 +2,23 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [视觉重设计] - 2026-05-15
+
+Claude Design 输出的两套视觉方向落地。
+
+### Added
+- `theme.py` — `ThemeManager` + WARM/GLASS palettes
+- `chrome_widgets.py` — `TitleBar`, `ThemeToggleButton`, `WinControls` (frameless 窗自绘 chrome)
+- `pet_avatar.py` — SVG-painted `PetAvatar`, 3 moods (idle/talking/sleep) + dark variant
+- `status_pill.py` — `StatusPill` 状态胶囊 (待机/思考中/在线)
+
+### Changed
+- `ChatWindow` → frameless + 自绘 32px 标题栏 + 主题切换按钮
+- Sidebar 配色改 theme-aware, 卡片 56px 高 + 二级行 + 设置 footer
+- `ConversationPanel` 头部重设计 (头像 + 心情 + StatusPill)
+- Composer 升级为圆角卡片 + 工具行 + 主色实心发送按钮
+- 主题切换实时广播到所有 panel, 包括气泡/送钮/输入框配色
+
 ## [Unreleased]
 
 ### Changed
