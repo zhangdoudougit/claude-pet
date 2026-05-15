@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+### Changed
+- 聊天面板改造为微信式一体窗 (左侧会话列表 + 右侧独立 panel)
+  - 闲聊永远置顶, 项目按最近活跃排序
+  - 每张卡片独立 claude 子进程, 切走后台继续跑
+  - 角标语言: 黄=思考中、红=等权限确认、蓝=未读
+  - 新增 "+" 按钮添加项目, 自定义简码 (2-4 字符) + 8 色调色板
+- 聊天窗不再贴桌宠跟随, 改为独立窗口 (标准 chrome, 默认 900×620)
+
+### Added
+- `conversation_store.py` — 元数据 + 持久化
+- `claude_worker.py` — 单个 claude 子进程封装
+- `permission_router.py` — 多 worker 权限请求路由
+- `chat_panel.py` — `ConversationPanel` 单会话视图
+- `sidebar.py` — 会话列表 + `AddProjectDialog`
+
+### Migration
+- 老 `.chat_state/conv/proj_xxx/meta.json` 启动时自动补全 short_code/color/timestamps 字段
+
 ## [1.0.0] - 2026-05-06
 
 首个公开发布版本。
