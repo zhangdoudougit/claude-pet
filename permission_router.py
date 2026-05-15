@@ -50,14 +50,12 @@ class PermissionRouter(QObject):
         socket = self._server.nextPendingConnection()
         if socket is None:
             return
-        # 每个 connection 只 dispatch 一次, 避免 chunked read 时 readyRead 多触发.
+        # 每个 connection 只 dispatch 一次. 我们的协议是"一条 JSON 一次写入",
+        # 小包通常在一次 readyRead 就到齐; 一旦 dispatch 就断开后续 readyRead.
         handled = {"v": False}
 
         def on_ready():
             if handled["v"]:
-                return
-            # 等待对端写完一整条 JSON (我们的协议: 一条 JSON 一次写入)
-            if socket.bytesAvailable() == 0:
                 return
             handled["v"] = True
             self._handle_socket(socket)
