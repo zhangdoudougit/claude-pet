@@ -290,8 +290,11 @@ class ConversationPanel(QWidget):
         self.store.touch(self.entry.key)
         self.status_label.setText("· 待机")
 
-        # Reset per-turn state
+        # Reset per-turn state (chip dicts too, so a crash-path call to
+        # _finalize_turn doesn't carry stale tool state into the next turn)
         self._tool_strip = None
+        self._tool_chips.clear()
+        self._tool_index_to_chip.clear()
         self._current_bubble = None
         self._current_text = ""
 
@@ -308,6 +311,13 @@ class ConversationPanel(QWidget):
         self.bubble_layout.insertWidget(self.bubble_layout.count() - 1, notice)
         self.store.set_badge(self.entry.key, "none")
         self.status_label.setText("· 错误")
+        # Clear per-turn state so a late stale chunk doesn't latch onto an
+        # orphaned bubble.
+        self._tool_strip = None
+        self._tool_chips.clear()
+        self._tool_index_to_chip.clear()
+        self._current_bubble = None
+        self._current_text = ""
 
     def _on_finished(self, exit_code: int):
         # assistant_done event already called _finalize_turn; only act if it
