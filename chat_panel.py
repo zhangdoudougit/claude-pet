@@ -274,6 +274,96 @@ class ConversationPanel(QWidget):
 
     # ------------------------------------------------------------- send flow --
 
+    # --------------------------------------------------------- theme application --
+
+    def apply_theme(self, name: str):
+        """Reapply palette-based stylesheets for current theme.
+
+        name: "warm" or "glass".
+        """
+        if name == "glass":
+            self._apply_glass_theme()
+        else:
+            self._apply_warm_theme()
+
+    def _apply_warm_theme(self):
+        # Window bg + body text color
+        self.setStyleSheet(
+            "ConversationPanel { background: #fafaf6; }"
+        )
+        # Subtitle + mood line
+        if hasattr(self, "subtitle_label"):
+            self.subtitle_label.setStyleSheet("color: #9a9387;")
+        if hasattr(self, "mood_line"):
+            self.mood_line.setStyleSheet("color: #6b6457;")
+        # Send button (accent mint)
+        if hasattr(self, "send_btn"):
+            self.send_btn.setStyleSheet(
+                "QPushButton { background: #7fb993; color: #fff; border: none; "
+                "border-radius: 8px; padding: 0 14px; font-size: 9.5pt; "
+                "font-weight: 600; }"
+                "QPushButton:hover { background: #6fa882; }"
+                "QPushButton:disabled { background: #c9c2b2; }"
+            )
+        # Composer card
+        composer = self.findChild(QFrame, "composer_card")
+        if composer is not None:
+            composer.setStyleSheet(
+                "QFrame#composer_card { background: #fff; "
+                "border: 1px solid #e8e3d6; border-radius: 12px; }"
+            )
+        # Input
+        if hasattr(self, "input"):
+            self.input.setStyleSheet(
+                "QPlainTextEdit { background: transparent; border: none; "
+                "font-size: 11pt; color: #1d1b16; padding: 0; }"
+            )
+        # Tool buttons + kbd hint
+        if hasattr(self, "kbd_hint"):
+            self.kbd_hint.setStyleSheet("color: #9a9387; margin-right: 8px;")
+        # Avatar dark mode off
+        if hasattr(self, "header_avatar"):
+            self.header_avatar.set_dark(False)
+        # Title label
+        if hasattr(self, "title_label"):
+            self.title_label.setStyleSheet("color: #1d1b16;")
+
+    def _apply_glass_theme(self):
+        self.setStyleSheet(
+            "ConversationPanel { background: #1a1c20; }"
+        )
+        if hasattr(self, "subtitle_label"):
+            self.subtitle_label.setStyleSheet("color: #6e6b62;")
+        if hasattr(self, "mood_line"):
+            self.mood_line.setStyleSheet("color: #a8a59b;")
+        if hasattr(self, "send_btn"):
+            self.send_btn.setStyleSheet(
+                "QPushButton { background: #5ea8c9; color: #fff; border: none; "
+                "border-radius: 8px; padding: 0 14px; font-size: 9.5pt; "
+                "font-weight: 600; }"
+                "QPushButton:hover { background: #4a8ea8; }"
+                "QPushButton:disabled { background: rgba(255,255,255,0.18); }"
+            )
+        composer = self.findChild(QFrame, "composer_card")
+        if composer is not None:
+            composer.setStyleSheet(
+                "QFrame#composer_card { background: rgba(255,255,255,0.04); "
+                "border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }"
+            )
+        if hasattr(self, "input"):
+            self.input.setStyleSheet(
+                "QPlainTextEdit { background: transparent; border: none; "
+                "font-size: 11pt; color: #ecebe7; padding: 0; }"
+            )
+        if hasattr(self, "kbd_hint"):
+            self.kbd_hint.setStyleSheet("color: #6e6b62; margin-right: 8px;")
+        if hasattr(self, "header_avatar"):
+            self.header_avatar.set_dark(True)
+        if hasattr(self, "title_label"):
+            self.title_label.setStyleSheet("color: #ecebe7;")
+
+    # ------------------------------------------------------------- send flow --
+
     def _on_send_clicked(self):
         text = self.input.toPlainText().strip()
         if not text:

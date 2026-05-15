@@ -3010,6 +3010,11 @@ class ChatWindow(QWidget):
         self.store.entry_added.connect(self._on_entry_added)
         self.store.entry_removed.connect(self._on_entry_removed)
 
+        # VR8: broadcast theme changes to all panels
+        self.theme_mgr.theme_changed.connect(self._broadcast_theme)
+        # apply current theme once on construction to get colors right
+        QTimer.singleShot(0, lambda: self._broadcast_theme(self.theme_mgr.name))
+
     # ---------- window chrome ----------
 
     def _toggle_max(self):
@@ -3017,6 +3022,17 @@ class ChatWindow(QWidget):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def _broadcast_theme(self, name: str):
+        """Apply current theme to window bg + all panels."""
+        p = self.theme_mgr.palette
+        bg = p.get("paper") or p.get("glass1") or "#fafaf6"
+        self.setStyleSheet(
+            f"ChatWindow {{ background: {bg}; }}"
+        )
+        for panel in self._panels.values():
+            if hasattr(panel, "apply_theme"):
+                panel.apply_theme(name)
 
     # ---------- panel lifecycle ----------
 

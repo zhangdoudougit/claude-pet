@@ -74,3 +74,21 @@ def test_deleting_project_removes_panel(isolated_state, qapp, qtbot, tmp_path):
     qtbot.waitUntil(lambda: entry.key in win._panels, timeout=2000)
     win.store.delete_project(entry.key, purge_history=False)
     assert entry.key not in win._panels
+
+
+def test_chat_window_broadcasts_theme(isolated_state, qapp, qtbot):
+    from chat_window import ChatWindow
+    win = ChatWindow()
+    qtbot.addWidget(win)
+    # Initial state: warm theme, panel should be styled for warm
+    qtbot.waitUntil(lambda: "chat" in win._panels, timeout=2000)
+    panel = win._panels["chat"]
+    # Switch to glass
+    win.theme_mgr.set("glass")
+    # Panel's stylesheet should now mention glass-mode bg (#1a1c20)
+    qtbot.wait(50)  # allow signal to propagate
+    assert "1a1c20" in panel.styleSheet().lower()
+    # Switch back
+    win.theme_mgr.set("warm")
+    qtbot.wait(50)
+    assert "fafaf6" in panel.styleSheet().lower()
