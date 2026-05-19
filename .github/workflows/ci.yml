@@ -22,7 +22,15 @@ jobs:
         run: |
           python -m py_compile \
             foamo_pet.py \
-            chat_window.py \
+            chat_paths.py \
+            chat_bridge.py \
+            chat_web_window.py \
+            add_project_dialog.py \
+            settings_dialog.py \
+            mcp_manager.py \
+            conversation_store.py \
+            claude_worker.py \
+            permission_router.py \
             permission_dialog.py \
             context.py \
             journal.py \
@@ -54,5 +62,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           python -c "import context, journal"
-          python -c "from chat_window import md_to_html, _resolve_proxy; print('chat_window OK')"
+          python -c "from chat_paths import _resolve_proxy, load_permission_mode; print('chat_paths OK')"
+          python -c "import chat_bridge; print('chat_bridge OK')"
+          python -c "import chat_web_window; print('chat_web_window OK')"
+          python -c "import add_project_dialog; print('add_project_dialog OK')"
+          python -c "import settings_dialog; print('settings_dialog OK')"
           python -c "import permission_dialog; print('permission_dialog OK')"

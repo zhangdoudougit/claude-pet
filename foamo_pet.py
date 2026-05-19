@@ -10,6 +10,34 @@
 """
 import sys
 import os
+# 必须在 import PyQt6 / 创建 QApplication 之前 — 这里设了 Chromium 远程调试端口,
+# 让我们能用 Chrome 连 http://localhost:9876 看聊天框的 DOM 和 console.
+# 关键:
+#  1) Chromium 117+ 默认拒绝远程调试的 WebSocket 跨源连接, 必须加
+#     --remote-allow-origins=* 才能让 DevTools 真正 attach.
+#  2) 只能用 chromium flags 这一种, 不能同时设 QTWEBENGINE_REMOTE_DEBUGGING
+#     — 会导致 Chromium 试图 bind 两次同端口, 报 WSAEADDRINUSE.
+def _add_chromium_flag(flag: str):
+    """幂等追加 — 已存在的 flag 跳过, 避免 --remote-debugging-port 重复触发
+    WSAEADDRINUSE."""
+    cur = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    # flag 前缀匹配 (如 --remote-debugging-port=9876 → 看 --remote-debugging-port= 是否已存在)
+    key = flag.split("=", 1)[0] + "="
+    if "=" in flag:
+        parts = cur.split()
+        parts = [p for p in parts if not p.startswith(key)]
+        parts.append(flag)
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = " ".join(parts)
+    else:
+        if flag in cur.split():
+            return
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (cur + " " + flag).strip()
+
+_add_chromium_flag("--remote-debugging-port=9876")
+_add_chromium_flag("--remote-allow-origins=*")
+print(f"[foamo] Chromium flags: {os.environ['QTWEBENGINE_CHROMIUM_FLAGS']}",
+      file=sys.stderr)
+
 import json
 import re
 import random
@@ -1647,15 +1675,16 @@ class FoamoWidget(QWidget):
         self.show()
 
     def open_chat(self):
-        """切换聊天面板 (独立窗口, 懒加载, 不再贴着桌宠跟随)"""
+        """切换聊天面板 (web 渲染版, QWebEngineView + ChatBridge)"""
         if self._chat_window is None:
             try:
-                from chat_window import ChatWindow
+                from chat_web_window import ChatWebWindow
+                from chat_paths import STATE_DIR  # 复用 .chat_state 目录
             except Exception as e:
                 from PyQt6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "聊天框启不来", f"加载 chat_window 失败:\n{e}")
+                QMessageBox.warning(self, "聊天框启不来", f"加载 chat_web_window 失败:\n{e}")
                 return
-            self._chat_window = ChatWindow()
+            self._chat_window = ChatWebWindow(state_dir=STATE_DIR)
         self._chat_window.toggle()
 
     # ============================================================
@@ -1926,10 +1955,42 @@ class FoamoTray(QSystemTrayIcon):
 # main
 # ============================================================
 def main():
+    # 必须在 QApplication 之前设, 否则 WebEngine 不读
+    os.environ.setdefault("QTWEBENGINE_REMOTE_DEBUGGING", "9876")
+    # WebEngine 透明背景需要 Chromium 的 transparent compositor
+    os.environ.setdefault(
+        "QTWEBENGINE_CHROMIUM_FLAGS",
+        "--enable-features=UseOzonePlatform --enable-transparent-visuals"
+        " --disable-gpu-driver-bug-workarounds",
+    )
+    # WebEngine 强制要求: 必须在 QApplication 之前 import (或 AA_ShareOpenGLContexts)
+    # 否则 ImportError. 这里 import 一次 (不实例化) 即可初始化 GL 共享上下文
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)
     app.setQuitOnLastWindowClosed(False)  # 关窗口不退出,留托盘
+    # 全局字体: 设计稿 PW.font = "Noto Sans SC","Inter",-apple-system,sans-serif
+    # Windows 上对齐到 Microsoft YaHei UI (中文好看) + Segoe UI Variable (英文好看)
+    # PyQt6 family list 取首个可用. 字号 10pt (默认 9pt 略小).
+    from PyQt6.QtGui import QFontDatabase as _QFD
+    _families = _QFD.families()
+    if "Microsoft YaHei UI" in _families:
+        _base = "Microsoft YaHei UI"
+    elif "Microsoft YaHei" in _families:
+        _base = "Microsoft YaHei"
+    elif "Noto Sans SC" in _families:
+        _base = "Noto Sans SC"
+    else:
+        _base = "Segoe UI"
+    _f = QFont(_base, 10)
+    _f.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+    _f.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+    app.setFont(_f)
 
     # 创建组件 (上下文感知 → 状态机 → widget → 持久化)
     activity = ActivityTracker()

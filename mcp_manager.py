@@ -331,24 +331,16 @@ class MCPEditDialog(QDialog):
 
 
 # ---------------- 主管理 dialog ----------------
-class MCPManagerDialog(QDialog):
-    """MCP server 列表 + 增删改"""
+class MCPManagerWidget(QWidget):
+    """MCP server 列表 + 增删改 (无关闭按钮, 可嵌入 dialog/tab)."""
 
     def __init__(self, root: Path, parent=None):
         super().__init__(parent)
         self._root = root
-        self.setWindowTitle("MCP 服务器")
-        self.setMinimumSize(560, 400)
 
         v = QVBoxLayout(self)
-        v.setContentsMargins(16, 14, 16, 14)
+        v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(10)
-
-        v.addWidget(QLabel(
-            "全局 MCP 服务器配置 — 所有项目和闲聊共享。\n"
-            "勾选 = 启用 (下次发消息时通过 claude --mcp-config 加载),\n"
-            "取消勾选 = 禁用 (保留配置但不加载)。"
-        ))
 
         # 列表
         self.list_w = QListWidget()
@@ -375,9 +367,6 @@ class MCPManagerDialog(QDialog):
         imp.setToolTip("把你 Claude Code 全局配置里的 mcpServers 拉进来")
         imp.clicked.connect(self._on_import)
         btn_row.addWidget(imp)
-        close = QPushButton("关闭")
-        close.clicked.connect(self.accept)
-        btn_row.addWidget(close)
         v.addLayout(btn_row)
 
         self._load_into_list()
@@ -658,6 +647,38 @@ class MCPManagerDialog(QDialog):
             f"新增: {added}    覆盖: {replaced}    跳过: {skipped}\n"
             f"来源: {path}"
         )
+
+
+class MCPManagerDialog(QDialog):
+    """老版兼容 wrapper — QDialog 包 MCPManagerWidget + 关闭按钮.
+
+    新 ChatWebWindow 的 SettingsDialog 直接嵌入 MCPManagerWidget;
+    老 ChatWindow 的右键菜单还是用这个 dialog.
+    """
+
+    def __init__(self, root: Path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("MCP 服务器")
+        self.setMinimumSize(560, 400)
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(16, 14, 16, 14)
+        v.setSpacing(10)
+
+        v.addWidget(QLabel(
+            "全局 MCP 服务器配置 — 所有项目和闲聊共享。\n"
+            "勾选 = 启用 (下次发消息时通过 claude --mcp-config 加载),\n"
+            "取消勾选 = 禁用 (保留配置但不加载)。"
+        ))
+        self.widget = MCPManagerWidget(root, self)
+        v.addWidget(self.widget, 1)
+
+        bar = QHBoxLayout()
+        bar.addStretch(1)
+        close = QPushButton("关闭")
+        close.clicked.connect(self.accept)
+        bar.addWidget(close)
+        v.addLayout(bar)
 
 
 # ---------------- 单跑测试 ----------------
