@@ -172,7 +172,7 @@ class SettingsDialog(QDialog):
         v.setSpacing(8)
 
         rows = [
-            ("项目根目录", ROOT, "foamo_pet 安装位置"),
+            ("项目根目录", ROOT, "Claude Pet 安装位置"),
             ("状态目录", STATE_DIR, "代理 / 历史 / 会话 都在这"),
             ("会话目录", CONV_DIR, "每个项目一个子文件夹"),
             ("粘贴图片", PASTED_DIR, "粘贴/拖入的截图落盘在这, 最近 50 张"),

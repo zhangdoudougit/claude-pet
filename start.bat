@@ -1,10 +1,10 @@
 @echo off
-title Foamo Desktop Pet
+title Claude Pet
 
 cd /d "%~dp0"
 
 echo ============================================
-echo   Foamo Desktop Pet - Starting
+echo   Claude Pet - Starting
 echo ============================================
 echo.
 
@@ -19,7 +19,7 @@ echo Done.
 echo.
 
 :start_pet
-echo [2/2] Starting Foamo...
+echo [2/2] Starting Claude Pet...
 echo.
 echo Look for the bubble character on your desktop.
 echo Look for the system tray icon (bottom-right corner).
@@ -29,10 +29,10 @@ echo Close this window with Ctrl+C, or quit from the tray menu.
 echo ============================================
 echo.
 
-python foamo_pet.py
+python claude_pet.py
 
 echo.
-echo Foamo stopped.
+echo Claude Pet stopped.
 pause
 goto :eof
 

@@ -19,7 +19,7 @@ labels: bug
 - OS: <!-- Windows 11 / macOS 14 / Ubuntu 22.04 -->
 - Python:
 - Claude Code: <!-- claude --version -->
-- foamo-pet 版本 / commit:
+- claude-pet 版本 / commit:
 
 ## 日志
 

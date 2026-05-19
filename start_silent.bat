@@ -1,4 +1,4 @@
 @echo off
-REM Start Foamo in the background (no terminal window)
+REM Start Claude Pet in the background (no terminal window)
 cd /d "%~dp0"
-start "" pythonw foamo_pet.py
+start "" pythonw claude_pet.py

@@ -21,7 +21,7 @@ jobs:
       - name: py_compile 所有源文件
         run: |
           python -m py_compile \
-            foamo_pet.py \
+            claude_pet.py \
             chat_paths.py \
             chat_bridge.py \
             chat_web_window.py \

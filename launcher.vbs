@@ -11,5 +11,5 @@ If Not fso.FileExists(marker) Then
     sh.Run """" & here & "\start.bat""", 1, True
 Else
     ' Subsequent runs: silent launch via pythonw (no console)
-    sh.Run "pythonw """ & here & "\foamo_pet.py""", 0, False
+    sh.Run "pythonw """ & here & "\claude_pet.py""", 0, False
 End If

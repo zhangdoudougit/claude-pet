@@ -75,11 +75,11 @@
 
 如果你的 GIF **不是透明背景**（带白色/纯色底），看起来会有方形底色。要么：
 - 重新导出成透明背景
-- 或者改 `foamo_pet.py` 里 `WIDGET_W/H` 让窗口刚好等于角色尺寸
+- 或者改 `claude_pet.py` 里 `WIDGET_W/H` 让窗口刚好等于角色尺寸
 
 # 调整光晕颜色
 
-光晕颜色是程序根据状态生成的（不是图片里的）。改 `foamo_pet.py` 顶部 `STATE_COLORS`：
+光晕颜色是程序根据状态生成的（不是图片里的）。改 `claude_pet.py` 顶部 `STATE_COLORS`：
 
 ```python
 STATE_COLORS = {

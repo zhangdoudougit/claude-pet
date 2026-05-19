@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for foamo_pet tests."""
+"""Shared pytest fixtures for Claude Pet tests."""
 import sys
 from pathlib import Path
 

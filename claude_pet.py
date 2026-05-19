@@ -1,12 +1,12 @@
 """
-泡沫桌面陪伴 (Foamo Desktop Pet)
+Claude Pet · 桌面陪伴 (角色: 泡沫 / foamo)
 ================================
 - 280x280 桌面悬浮窗,系统托盘
 - 监听 ~/.claude/projects/*.jsonl 对话日志
 - 关键词触发状态切换 + 台词气泡
 - 角色用 GIF,放 assets/ 下,可随时替换
 
-启动: python foamo_pet.py
+启动: python claude_pet.py
 """
 import sys
 import os
@@ -74,8 +74,8 @@ from journal import (
 # ============================================================
 # 配置
 # ============================================================
-APP_NAME = "Foamo"
-ORG_NAME = "DogeFoamo"
+APP_NAME = "Claude Pet"
+ORG_NAME = "DogeFoamo"  # 保留:Windows QSettings 注册表路径,改名会丢已有用户设置
 
 ROOT = Path(__file__).parent
 CLAUDE_PROJECTS_DIR = Path.home() / '.claude' / 'projects'
@@ -836,7 +836,7 @@ class FoamoWidget(QWidget):
         return int(self.height() * CHAR_OFFSET_Y_RATIO)
 
     def _setup_window(self):
-        self.setWindowTitle("Foamo")
+        self.setWindowTitle("Claude Pet")
         # 透明属性必须在 setWindowFlags 之前生效
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setWindowFlags(

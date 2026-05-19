@@ -22,6 +22,10 @@ Claude Design 输出的两套视觉方向落地。
 ## [Unreleased]
 
 ### Changed
+- **项目改名**: `foamo-pet` → `claude-pet`,入口文件 `foamo_pet.py` → `claude_pet.py`,
+  品牌字符串 `Foamo` → `Claude Pet`(README / 启动脚本 / 窗口标题 / 桌面快捷方式)。
+  桌宠角色名 **泡沫 / foamo** 不变,`foamo.ico` / `web/foamo.png` / `~/.foamo_pet/` 数据目录
+  / `ORG_NAME="DogeFoamo"` QSettings / `FoamoWidget` 类名 全部保留(角色身份 + 老数据兼容)。
 - 聊天面板改造为微信式一体窗 (左侧会话列表 + 右侧独立 panel)
   - 闲聊永远置顶, 项目按最近活跃排序
   - 每张卡片独立 claude 子进程, 切走后台继续跑
@@ -79,7 +83,7 @@ Claude Design 输出的两套视觉方向落地。
 ### 开发体验
 - `.chat_state/debug.log` 持续记录 spawn / stderr / glass / finished
 - `.chat_state/permission.log` 记录每次权限决策
-- 单跑 `python chat_window.py`(假桌宠 + 面板)调试聊天面板,不必启完整 foamo_pet
+- 单跑 `python chat_window.py`(假桌宠 + 面板)调试聊天面板,不必启完整 claude_pet
 
-[Unreleased]: https://github.com/zhangdoudougit/foamo-pet/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/zhangdoudougit/foamo-pet/releases/tag/v1.0.0
+[Unreleased]: https://github.com/zhangdoudougit/claude-pet/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/zhangdoudougit/claude-pet/releases/tag/v1.0.0

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 # 开 Chromium 远程调试 — 这里 setdefault 只在单独跑 chat_web_window 时兜底,
-# 正常路径 foamo_pet.py 已经在最早处设置好了.
+# 正常路径 claude_pet.py 已经在最早处设置好了.
 # 注意: 只能走 chromium flags, 不能再额外设 QTWEBENGINE_REMOTE_DEBUGGING,
 # 否则 Chromium 会试图 bind 两次同端口报 WSAEADDRINUSE.
 os.environ.setdefault(

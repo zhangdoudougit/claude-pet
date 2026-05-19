@@ -1,4 +1,6 @@
-# Foamo · 泡沫桌面陪伴 🫧
+# Claude Pet · 桌面陪伴 🫧
+
+> _项目名 `claude-pet`,桌宠角色 **泡沫(foamo / 小丸子)**。_
 
 > 桌面悬浮的 AI 搭档,也能直接和 [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) 双向对话——不打开 IDE 就能让 AI 改你的代码。
 
@@ -109,8 +111,8 @@
 ### Windows
 
 ```bash
-git clone https://github.com/zhangdoudougit/foamo-pet.git
-cd foamo-pet
+git clone https://github.com/zhangdoudougit/claude-pet.git
+cd claude-pet
 start.bat            # 首次自动 pip install PyQt6
 ```
 
@@ -119,10 +121,10 @@ start.bat            # 首次自动 pip install PyQt6
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/zhangdoudougit/foamo-pet.git
-cd foamo-pet
+git clone https://github.com/zhangdoudougit/claude-pet.git
+cd claude-pet
 pip install -r requirements.txt
-python foamo_pet.py
+python claude_pet.py
 ```
 
 > macOS / Linux 没有 Mica/Acrylic,聊天面板会自动降级到半透明窗口(`opacity 0.96`),功能不受影响。
@@ -181,15 +183,16 @@ http://127.0.0.1:7897
 ## 📁 文件结构
 
 ```
-foamo-pet/
-├── foamo_pet.py             # 桌宠主程序 (PyQt6 widget + 状态机)
-├── chat_window.py           # 聊天面板 (Native PyQt6)
+claude-pet/
+├── claude_pet.py            # 桌宠主程序 (PyQt6 widget + 状态机)
+├── chat_web_window.py       # 聊天面板 (QWebEngine + web/)
+├── chat_bridge.py           # Web ↔ Python QWebChannel 桥
+├── web/                     # 聊天面板前端 (HTML/CSS/JS)
 ├── permission_dialog.py     # PreToolUse hook 弹窗脚本
 ├── context.py               # 活动追踪 / 项目识别
 ├── journal.py               # 番茄钟 / 周报记账
-├── _make_placeholder_gifs.py# 生成占位 GIF (跑过一次就不用了)
 ├── make_icon.py             # 从 PNG 生成 .ico
-├── foamo.ico                # 应用图标(也是泡沫的头像)
+├── foamo.ico                # 桌宠角色头像 (角色名: foamo / 小丸子)
 ├── start.bat / start_silent.bat
 ├── assets/                  # 6 张状态 GIF (idle/tender/focused/happy/worried/proud)
 ├── docs/screenshots/        # 截图
@@ -233,7 +236,7 @@ foamo-pet/
 
 ## 🛠 改关键词 / 台词
 
-`foamo_pet.py` 顶部:
+`claude_pet.py` 顶部:
 
 - `KEYWORD_RULES` — 正则规则,触发哪个状态
 - `LINES` — 各状态台词列表
