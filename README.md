@@ -304,6 +304,180 @@ STATE_EXPRESSION_PRESETS = {
 
 ---
 
+## 📊 状态机详图
+
+> 这部分是 [`STATE_FLOW.html`](STATE_FLOW.html) 的 Markdown 镜像 —— GitHub 原生渲染 Mermaid,直接看;想看暗色主题 + 完整台词桶版本,本地浏览器打开 `STATE_FLOW.html`。
+
+### 1. 主路径:jsonl 增量 → `state_changed`
+
+每秒轮询所有 jsonl 文件大小,只读新增文本;提取 user / assistant 消息后送入状态机做**三层处理**:关键词 → 上下文重映射 → 频控。
+
+```mermaid
+flowchart TD
+    Start([ClaudeLogWatcher · 1Hz<br/>~/.claude/projects/**/*.jsonl])
+    Start --> Extract[_extract_text<br/>抓 user/assistant + tool_use]
+    Extract -->|有文本| Sig1[text_detected signal]
+    Extract -->|无文本| Drop1([忽略])
+    Sig1 --> DA[StateManager.detect_and_apply]
+    DA --> Locked{locked?<br/>番茄钟期间}
+    Locked -->|是| Drop2([冻结 · 忽略])
+    Locked -->|否| KW{KEYWORD_RULES<br/>正则按序匹配}
+    KW -->|无命中| Drop3([忽略])
+    KW -->|_danger| D[切 worried<br/>line ← _danger 桶]
+    KW -->|_jealous| J[切 tender<br/>line ← _jealous 桶]
+    KW -->|worried| Wo[new_state=worried]
+    KW -->|happy| Ha[new_state=happy]
+    KW -->|proud| Pr[new_state=proud]
+    KW -->|focused| Fo[new_state=focused]
+    Wo --> ErrMem{错误模式记忆<br/>提取 ExceptionType}
+    ErrMem -->|本周累计 ≥ 3| Fam[line ← _familiar_error]
+    ErrMem -->|首次或 < 3| Ctx{is_late_night<br/>+ worried?}
+    Fam --> Ctx
+    Ha --> Ctx
+    Pr --> Ctx
+    Fo --> Ctx
+    D --> Ctx
+    J --> Ctx
+    Ctx -->|是| Rewrite[重写 tender<br/>line ← _late_worried]
+    Ctx -->|否| LF{focused +<br/>long_focus 一次性}
+    Rewrite --> LF
+    LF -->|是| LFLine[line ← _long_focus]
+    LF -->|否| Th{频控<br/>同态 < 3s · 5s 内 ≥ 3 次}
+    LFLine --> Th
+    Th -->|跳过| Drop4([忽略])
+    Th -->|通过| Apply[_set_state]
+    Apply --> Out[state_changed.emit<br/>→ Widget 切 GIF + 气泡<br/>→ Journal 写日志]
+```
+
+### 2. 危险命令哨兵(`_danger`)
+
+监听 assistant 工具调用里的命令字符串;命中即切 `worried` + 警示台词。优先级**最高**,在 `_jealous` 之前匹配。**不真拦截,仅本地反应**。
+
+```mermaid
+flowchart TD
+    A[新文本进入 detect_and_apply] --> B{DANGER_PATTERN 匹配?}
+    B -->|否| Skip([跳过 → 走常规 KEYWORD])
+    B -->|是| C[new_state = _danger]
+    C --> D[重写 worried<br/>line ← _danger 桶]
+    D --> E[跳过错误模式 / 深夜重映射]
+    E --> F[频控判断]
+    F -->|通过| G[Widget 切 worried GIF<br/>+ 警示气泡]
+    F -->|跳过| Drop([忽略])
+```
+
+匹配的命令模式:`rm -rf` · `git reset --hard` · `git push --force / -f` · `git clean -fdx` · `DROP TABLE / DATABASE` · `TRUNCATE TABLE` · `DELETE FROM ... 无 WHERE` · `shutdown -h / reboot` · `mkfs.* / dd if=` · `--no-verify`(跳 hook)
+
+### 3. 错误模式记忆(`_familiar_error`)
+
+命中 `worried` 时,从文本抓 `ExceptionType`(`KeyError` / `TypeError` / ...)写入 SQLite,同一指纹**本周累计 ≥3 次**时,把台词换成"老朋友又来了"风格的吐槽。
+
+```mermaid
+flowchart TD
+    A[KEYWORD_RULES 命中 worried] --> B{journal 已注入<br/>且 line 仍空}
+    B -->|否| End1([常规走 worried 桶])
+    B -->|是| C[ERROR_FINGERPRINT_PATTERN<br/>抓 ExceptionType]
+    C -->|无命中| End2([常规走 worried 桶])
+    C -->|命中| D[fingerprint = py:KeyError]
+    D --> E[journal.record_error<br/>INSERT into error_patterns]
+    E --> F[查本周累计 N]
+    F -->|N < 3| End3([常规走 worried 桶])
+    F -->|N ≥ 3| G[line ← _familiar_error<br/>套 .format n=N]
+    G --> H[继续深夜重映射 → 频控]
+    H --> I[Widget: worried GIF<br/>气泡显本周第 N 次]
+```
+
+**SQLite Schema**:
+
+```sql
+CREATE TABLE error_patterns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  fingerprint TEXT NOT NULL,
+  project TEXT
+);
+CREATE INDEX idx_err_fp_ts ON error_patterns(fingerprint, ts);
+```
+
+### 4. 副路径:安静期闲聊(`IdleTimer 45s`)
+
+没有外部触发也会自言自语。距上次状态变更 **60s 以上**才动嘴。
+
+```mermaid
+flowchart TD
+    Tick([IdleTimer · 每 45s]) --> L{locked?}
+    L -->|是| S1([跳过])
+    L -->|否| Q{距上次变更 > 60s?}
+    Q -->|否| S2([跳过])
+    Q -->|是| P{time_period}
+    P -->|morning + 今日尚未问候| Mo[idle + _morning]
+    P -->|late_night| LN[tender + _late]
+    P -->|day / evening| Idle{activity.is_idle?}
+    Idle -->|是| IQ[tender + _idle_quiet]
+    Idle -->|否| RND[50/50 随机 idle/tender]
+    Mo --> Out[state_changed.emit]
+    LN --> Out
+    IQ --> Out
+    RND --> Out
+```
+
+### 5. 番茄钟旁路(`PomodoroController`)
+
+右键启动后状态机 lock 25 分钟,期间所有 `detect_and_apply` 输入**直接丢弃**,Widget 持续显倒计时。
+
+```mermaid
+flowchart LR
+    A([右键 · 开始番茄钟]) --> B[state_mgr.lock pomodoro]
+    B --> C[_set_state focused<br/>line ← _pomodoro_start]
+    C --> D[QTimer 1Hz 倒计时<br/>Widget 显 🍅 mm:ss]
+    D -->|25 分钟到| E[_set_state happy<br/>line ← _pomodoro_finish]
+    D -->|手动取消| F[_set_state tender<br/>line ← _pomodoro_cancel]
+    E --> G[unlock]
+    F --> G
+```
+
+### 6. 占有欲彩蛋(`_jealous`)
+
+豆哥在会话里提到别家 AI,泡沫切 `tender` + 酸味台词。是种**克制的小情绪**。
+
+```mermaid
+flowchart LR
+    A[文本含 ChatGPT/Gemini/Cursor/<br/>Copilot/Codex/OpenAI/Anthropic/<br/>文心/通义/豆包/kimi] --> B[new_state = _jealous]
+    B --> C[重写 tender<br/>line ← _jealous 桶]
+    C --> D[Widget: tender GIF<br/>气泡显酸味台词]
+```
+
+### 7. 关键参数 / 信号流
+
+| 参数 | 值 | 含义 |
+|---|---|---|
+| `MIN_STATE_HOLD` | 3.0 s | 同状态最小保持时间 |
+| `MAX_STATE_CHANGES_5S` | 3 | 5s 内最多状态切换次数 |
+| 闲聊周期 | 45 s | IdleTimer 触发频率 |
+| 闲聊门槛 | 60 s | 距上次状态变更需 >60s 才闲聊 |
+| `POMODORO_DURATION_S` | 25 min | 番茄钟时长 |
+| Watcher 轮询 | 1 Hz | jsonl 增量扫描间隔 |
+| `LONG_FOCUS_SECONDS` | 60 min | 触发 `_long_focus` 的连续活动阈值 |
+| `IDLE_THRESHOLD_SECONDS` | 30 min | `activity.is_idle` 阈值 |
+| 错误模式阈值 | 3 次/周 | 命中 `_familiar_error` 改写台词 |
+
+```mermaid
+flowchart LR
+    Watcher[ClaudeLogWatcher] -->|text_detected| SM[StateManager]
+    Watcher -->|text_detected| Act[ActivityTracker.mark_active]
+    Watcher -->|jsonl_active| PI[ProjectIdentifier]
+    SM -->|state_changed| Widget[FoamoWidget · GIF + 气泡]
+    SM -->|state_changed| Journal[Journal · events]
+    SM -->|record_error| ErrTbl[Journal · error_patterns]
+    Pom[PomodoroController] -->|lock/unlock| SM
+    Pom -.直接调用.-> Widget
+    Reporter[WeeklyReporter] -->|report_ready| Tray[FoamoTray · toast]
+    Reporter -->|report_ready| SM
+```
+
+> _泡沫的内核 · 由 jsonl 喂养 · 由 SQLite 记忆_
+
+---
+
 ## 📦 前置要求
 
 - **Python 3.10+**
