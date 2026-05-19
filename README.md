@@ -160,6 +160,150 @@ graph TD
 
 ---
 
+## 🎯 状态机 & 触发规则
+
+桌宠不会调任何 API,所有"情绪"切换都来自**本地监听** `~/.claude/projects/**/*.jsonl` —— Claude Code 自己写在那儿的对话流。
+
+### 6 个主状态
+
+| 状态 | 中文 | 光晕主色 | 默认台词风格 |
+|---|---|---|---|
+| `idle` | 陪伴态 | <code>#b39ddb</code>(淡紫) | 默默在线,偶尔冒一句 |
+| `tender` | 温柔态 | <code>#b39ddb</code>(淡紫) | "累了就歇会儿" "别熬太晚" |
+| `focused` | 专注态 | <code>#4dd0e1</code>(青蓝) | "嘘,别打扰" "稳住稳住" |
+| `happy` | 活泼态 | <code>#ff7eb6</code>(粉) | "搞定啦~" "本泡沫真厉害" |
+| `worried` | 担心态 | <code>#ffb74d</code>(琥珀) | "出什么事了" "一起想办法" |
+| `proud` | 得意态 | <code>#ffd54f</code>(金黄) | "小事一桩" "记得是谁陪你" |
+
+每个状态都有 5-7 句备选台词,触发时随机抽一句冒在气泡里(配置在 `claude_pet.py` 的 `LINES` 字典)。
+
+### 关键词触发规则
+
+监听到新对话 → 跑正则 → 第一条匹配的规则生效:
+
+| 触发 | 正则关键词 | 状态 / 效果 |
+|---|---|---|
+| **危险命令** | `rm -rf` / `git push --force` / `git reset --hard` / `DROP TABLE` / `DELETE ... (无 WHERE)` / `shutdown` / `mkfs` / `dd if=` / `--no-verify` | → `worried` + 哨兵台词("这个不可逆的","看一眼路径再回车") |
+| **提到别的 AI** | `ChatGPT` / `GPT-4` / `Gemini` / `Cursor` / `Copilot` / `Codex` / `豆包` / `通义` / `kimi` ... | → `tender` + 占有欲彩蛋台词("哼,问就问","他能比本泡沫更懂...") |
+| **错误信号** | `error` / `exception` / `traceback` / `报错` / `崩溃` / `failed` / `null reference` / `NaN` / `panic` / `fatal` | → `worried` |
+| **完成信号** | `✅` / `搞定` / `完成` / `成功` / `passed` / `fixed` / `solved` / `works` / `可以了` / `all tests pass` | → `happy` |
+| **被夸** | `谢谢` / `thanks` / `awesome` / `nice job` / `不错` / `厉害` / `nb` / `牛` / `完美` / `excellent` | → `proud` |
+| **工作信号** | `bug` / `debug` / `调试` / `分析` / `诊断` / `排查` / `测试` / `review` / `为什么` / `git commit/push/pull/merge/rebase` | → `focused` |
+
+> 规则顺序就是优先级。前面的命中后不再往下走 —— 比如"`git push --force` 修了 bug" 会先撞 `_danger`(危险命令),不会被 `happy` 截到。
+
+### 上下文事件(不靠关键词,靠时间 / 节奏)
+
+| 事件 | 触发条件 | 表现 |
+|---|---|---|
+| **凌晨问候** | 本地时间 ≥ 02:00 | 切 `tender` + "...都几点了豆哥" 类台词 |
+| **早起问候** | 启动时 06:00-10:00 | 切 `idle` + "豆哥早呀~" |
+| **长时间专注** | 同一状态持续 60 分钟 | 不切状态,冒"水。" / "肩膀。靠在椅背一下" |
+| **闲置安静** | 长时间无输入 | 冒省略号 / "(在的)" |
+| **同类错本周复发** | 同一 `ExceptionType` 在 7 天内 ≥3 次 | 切 `worried` + "...这熟悉的味道,本周第 N 次了" |
+| **番茄钟开始 / 完成 / 取消** | 用户从托盘 / 右键启动 | 切 `focused` + 三档专属台词 |
+
+### 改触发规则 / 台词
+
+`claude_pet.py` 顶部三个常量,改完保存即可,运行中会自动 reload:
+
+- `LINES`(各状态台词列表 + `_late` / `_jealous` / `_danger` 等上下文台词组)
+- `KEYWORD_RULES`(正则 → 状态映射,**顺序就是优先级**)
+- `STATE_COLORS`(状态光晕色,`(亮色, 暗色)` 元组)
+
+完整数据流见 [`STATE_FLOW.html`](STATE_FLOW.html)。
+
+---
+
+## 🎭 Live2D 立绘(可选)
+
+不喜欢 GIF?把 Live2D 模型扔进去,桌宠会变成会眨眼、会呼吸、眼神跟鼠标走的立绘。GIF 模式和 Live2D 模式可以**右键菜单随时切**,互不影响。
+
+### 加载模型
+
+```
+assets_live2d/
+├── 魔女/
+│   ├── 魔女.model3.json
+│   ├── 魔女.moc3
+│   ├── textures/
+│   ├── motions/        *.motion3.json
+│   └── expressions/    *.exp3.json
+└── <你的角色>/
+    └── ...
+```
+
+启动后右键托盘 → **角色** → 选要的模型。程序自动扫 `assets_live2d/**/*.model3.json`,无需配置。
+
+### 自动补全 model3.json
+
+VTube Studio 导出的素材**经常**漏写 `FileReferences.Motions` / `FileReferences.Expressions`,Cubism SDK 加载后只会眨眼,不会用表情和动作。
+
+程序检测到这种情况会**扫同目录的 `*.motion3.json` / `*.exp3.json`**,生成一份补全版 `<name>_foamo.model3.json` 副本喂给 SDK(原文件不改)。
+
+### 状态 → 表情映射
+
+桌宠状态变化时自动切表情。映射按"模型路径关键字"匹配,内置一个"魔女"模型示例:
+
+```python
+# live2d_canvas.py 顶部
+STATE_EXPRESSION_PRESETS = {
+    "魔女": {                # 模型路径含"魔女"就走这套
+        "idle":    "hdj",   # 默认表情
+        "tender":  "x",     # 爱心 — 温柔
+        "focused": "yj",    # 戴眼镜 — 专注
+        "happy":   "xx",    # 星星眼 — 雀跃
+        "worried": "ku",    # 哭 — 担心
+        "proud":   "fz",    # 法杖 — 邀功
+        "jealous": "sq",    # 生气 — 占有欲
+    },
+}
+```
+
+加新模型只需添加一行(关键字 + 6 个表情 ID 映射)。没匹配上的模型走"随机表情"兜底,不会崩。
+
+### 穿搭(Part 显隐)
+
+右键菜单 → **穿搭模式** → 点击立绘任意服饰部位 → 切显/隐:
+
+| 组 | 包含 | 关键字匹配 |
+|---|---|---|
+| 帽子 | 主体 + 装饰 + 后边 + 旋转壳 等所有"帽"part | `帽` |
+| 上衣 | 衣服 + 胸口 + 蝴蝶结 | `上衣` / `衣服` / `胸口` / `蝴蝶结` |
+| 裙子 | 短裙 + 裙撑 + 左右裙片 | `裙` |
+| 袜子 | 左右袜 + 各图层版本 | `袜` / `丝` |
+| 鞋子 | 左右鞋 / 靴 | `鞋` / `靴` |
+
+**按 group 聚合**:点一下"帽子"会同时切走所有相关 part(主体、装饰、后边、蒙皮、旋转壳……),不会出现"切到一半穿在头上的怪图"。
+
+腿 / 手 / 头 / 眼 / 嘴 是身体本体,**不在穿搭组里**,切不到(避免一不小心切掉皮肤)。
+
+切完会持久化,下次启动复原。
+
+### 面捕(实验)
+
+接 [mediapipe](https://google.github.io/mediapipe/) blendshapes,把摄像头读到的脸映射到 Cubism Param:
+
+- **头部姿态**:`yaw / pitch / roll` → `ParamAngleX / Y / Z` + 弱化的 `BodyX`
+- **眼睛眨**:`eyeBlinkLeft / Right` → `ParamEyeLOpen / ROpen`(自动眨眼会关掉,避免打架)
+- **眼球瞟向**:`eyeLookOut/In Left/Right` 综合算 X/Y → `ParamEyeBallX / Y`
+- **嘴**:`jawOpen` → `MouthOpenY`,`mouthSmile - mouthFrown` → `MouthForm`
+- **眉毛**:`browInnerUp - browDown(Left/Right)` → `ParamBrowLY / RY`(没 BrowRY 的模型用平均值兼任)
+
+参数名按模型实际暴露的 `ParamId` 自动 resolve(VTube Studio 导出多为 `PARAM_ANGLE_X` 大写蛇形,Cubism 原生为 `ParamAngleX`,都兼容)。
+
+### 静态姿态原则
+
+**默认不自动循环 Idle motion**(motion 循环会让模型一直晃,举法杖 / 摇头,跟 GIF 那种"定格姿态"对比起来反而不稳定)。立绘默认只:
+
+- 自动眨眼 + 自动呼吸(SDK 内置)
+- 眼神跟鼠标(Drag 接口)
+- 鼠标透传给父 widget(不影响拖动)
+
+想看 motion 表演?右键菜单手动触发对应 group。
+
+---
+
 ## 📦 前置要求
 
 - **Python 3.10+**
@@ -305,22 +449,14 @@ rm -rf ~/.foamo_pet/
 
 ## 🛠 自定义
 
-### 改关键词 / 台词
-
-`claude_pet.py` 顶部:
-
-- `KEYWORD_RULES` —— 正则规则,触发哪个状态
-- `LINES` —— 各状态台词列表
-
-修完保存即可,运行中也能 reload。
-
-### 换角色资源
-
-见上面 FAQ "想换桌宠形象怎么办?" 或 [`REPLACE_ASSETS.md`](REPLACE_ASSETS.md)。
-
-### 加快捷键 / 自定义命令
-
-在 `mcp_manager.py` 注册 MCP server,聊天面板会自动识别。
+| 你想改 | 改哪儿 | 详情 |
+|---|---|---|
+| **关键词触发 / 状态台词 / 光晕色** | `claude_pet.py` 顶部 | 见上面 [🎯 状态机 & 触发规则 → 改触发规则 / 台词](#改触发规则--台词) |
+| **桌宠 GIF / Live2D 资源** | `assets/` 或 `assets_live2d/<角色>/` | 见上面 [🎭 Live2D 立绘](#-live2d-立绘可选) / [`REPLACE_ASSETS.md`](REPLACE_ASSETS.md) |
+| **状态 → Live2D 表情映射** | `live2d_canvas.py` 的 `STATE_EXPRESSION_PRESETS` | 新模型加一行 (关键字 + 6 个 expression ID) |
+| **权限白名单 / 弹窗策略** | `permission_dialog.py` 顶部 `SKIP_TOOLS` | 默认放行 `Read / Glob / Grep / LS / NotebookRead / TodoWrite/Read` |
+| **MCP server / 自定义工具** | `mcp_manager.py` | 注册后聊天面板自动识别 |
+| **聊天面板配色** | `.chat_state/theme` + `web/app.css` | 双主题:WARM(暖白) / GLASS(暗) |
 
 ---
 
