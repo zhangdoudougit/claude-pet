@@ -12,7 +12,9 @@
 [![GitHub stars](https://img.shields.io/github/stars/zhangdoudougit/claude-pet?style=flat-square)](https://github.com/zhangdoudougit/claude-pet/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/zhangdoudougit/claude-pet?style=flat-square)](https://github.com/zhangdoudougit/claude-pet/commits)
 
-<p>🎬 <a href="#"><b>完整演示视频(整理中)</b></a> — 桌宠陪伴 + 聊天面板 + 项目模式 + 权限弹窗的全流程,文字图片说不清的看这个</p>
+<video src="https://github.com/user-attachments/assets/4b8c9271-be49-4987-99db-1b8243506eeb" controls width="800"></video>
+
+<sub>🎬 桌宠陪伴 + 聊天面板 + 项目模式 + 权限弹窗的全流程</sub>
 
 </div>
 
