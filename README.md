@@ -12,7 +12,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/zhangdoudougit/claude-pet?style=flat-square)](https://github.com/zhangdoudougit/claude-pet/stargazers)
 [![Last commit](https://img.shields.io/github/last-commit/zhangdoudougit/claude-pet?style=flat-square)](https://github.com/zhangdoudougit/claude-pet/commits)
 
-<p><img src="docs/screenshots/hero.gif" alt="Claude Pet 演示:桌宠 + 聊天面板联动" width="800"/></p>
+<p>🎬 <a href="#"><b>完整演示视频(整理中)</b></a> — 桌宠陪伴 + 聊天面板 + 项目模式 + 权限弹窗的全流程,文字图片说不清的看这个</p>
 
 </div>
 
@@ -50,8 +50,6 @@
 - 番茄钟、本周功劳簿(自动统计)
 - 拖动会抖动 + 冒台词,扒到屏幕边会"探头"
 - 可选 Live2D 立绘(放进 `assets_live2d/<角色名>/`)
-
-![桌宠 6 状态示意](docs/screenshots/pet-states.png)
 
 ### 💬 聊天面板
 
@@ -113,20 +111,6 @@
 
 - 代理透传:`.chat_state/proxy` 文件 / 环境变量 `HTTPS_PROXY`
 - 所有依赖能离线装(只需 `PyQt6`)
-
----
-
-## 📸 Screenshots
-
-> _截图陆续补完,以下是占位。_
-
-| 桌宠形态 | 聊天面板 | 多项目 |
-|---|---|---|
-| ![桌宠](docs/screenshots/pet-idle.png) | ![聊天面板](docs/screenshots/chat-warm.png) | ![多项目](docs/screenshots/multi-project.png) |
-
-完整演示视频:
-
-![Full demo](docs/screenshots/full-demo.gif)
 
 ---
 
