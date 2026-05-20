@@ -23,7 +23,7 @@
 一个本地运行的 **PyQt6 桌面悬浮宠物**,把 [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) 搬到你显示器右下角。两个独立但联动的能力:
 
 1. **被动陪伴** —— 监听 `~/.claude/projects/*.jsonl`,根据你和 Claude Code 的对话关键词自动切换状态(担心 / 活泼 / 专注 / 得意),不发任何东西到 API。
-2. **主动聊天** —— 桌宠双击呼出聊天面板,通过 `claude -p` 子进程跟 Claude Code 对话。**支持选定项目目录直接改代码**,不必打开 VSCode。
+2. **主动聊天** —— 桌宠双击呼出聊天面板,通过 `claude -p` 子进程跟 Claude Code 对话。**支持选定项目目录直接改代码**,不必打开 VSCode。**支持接入 DeepSeek / GLM / Kimi 等国内模型** 走国产替代(见 [🌐 接入第三方模型](#-接入第三方模型))。
 
 ```
 ┌─────────────────────────────────────┐         ┌──────┐
@@ -525,6 +525,52 @@ http://127.0.0.1:7897
 
 ---
 
+## 🌐 接入第三方模型
+
+> 走不通官方 Opus / Sonnet?DeepSeek / 智谱 GLM / Kimi 这类国内模型也能接。
+
+原理:`claude` CLI 认 **`ANTHROPIC_BASE_URL`** 和 **`ANTHROPIC_AUTH_TOKEN`** 两个环境变量,指到任何 Anthropic 兼容的网关(国产模型官方的 Anthropic 端点 / `claude-code-router` / LiteLLM …)即可。Claude Pet 把这套配置封到 `.chat_state/env.json`,发消息时**只注入到自己起的 `claude` 子进程**,不污染系统级用法。
+
+### 怎么用
+
+1. 聊天框打开 → 左下 **「设置」** → **🌐 模型 / API** tab
+2. 点 **「插入示例 ▾」** 选 preset:
+   - DeepSeek 官方 Anthropic 端点
+   - 智谱 GLM
+   - Kimi(Moonshot)
+   - claude-code-router 本地代理
+   - LiteLLM 本地代理
+3. 把模板里 `sk-你的-xxx-key` 改成真 token
+4. **「保存」** → JSON 校验通过后立即生效,直接发消息
+
+### 配置文件长这样
+
+`.chat_state/env.json`:
+
+```json
+{
+  "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+  "ANTHROPIC_AUTH_TOKEN": "sk-xxxxxxxx",
+  "ANTHROPIC_MODEL": "deepseek-chat",
+  "HTTPS_PROXY": ""
+}
+```
+
+- `value` 写 **空串 `""` 或 `null`** 表示从环境变量里删除该 key(典型用法:`"HTTPS_PROXY": ""` 走国内网关时清掉代理)
+- **只影响 foamo 自己**,系统里其他 `claude` 调用不受干扰
+- 想回到官方:Settings 里 **「清空」** 或直接删 `.chat_state/env.json`
+
+### 模型 ID 怎么定
+
+`claude` CLI 看 `--model` 优先,没传才读 `ANTHROPIC_MODEL`。两种用法:
+
+- **env.json 里写 `ANTHROPIC_MODEL`** → 顶栏"模型"下拉保持 **「默认」**,所有会话走 env.json 的模型
+- **顶栏选「自定义…」填模型 ID** → 覆盖 env.json,**每个会话独立**记住
+
+> 想要某个会话临时换模型?用第二种,不影响别的会话。
+
+---
+
 ## 🎮 使用
 
 ### 桌宠操作
@@ -629,7 +675,8 @@ rm -rf ~/.foamo_pet/
 | **桌宠 GIF / Live2D 资源** | `assets/` 或 `assets_live2d/<角色>/` | 见上面 [🎭 Live2D 立绘](#-live2d-立绘可选) / [`REPLACE_ASSETS.md`](REPLACE_ASSETS.md) |
 | **状态 → Live2D 表情映射** | `live2d_canvas.py` 的 `STATE_EXPRESSION_PRESETS` | 新模型加一行 (关键字 + 6 个 expression ID) |
 | **权限白名单 / 弹窗策略** | `permission_dialog.py` 顶部 `SKIP_TOOLS` | 默认放行 `Read / Glob / Grep / LS / NotebookRead / TodoWrite/Read` |
-| **MCP server / 自定义工具** | `mcp_manager.py` | 注册后聊天面板自动识别 |
+| **MCP server / 自定义工具** | `mcp_manager.py` 或 Settings → 🔌 MCP 服务器 | 注册后聊天面板自动识别 |
+| **第三方模型 / API endpoint** | `.chat_state/env.json` 或 Settings → 🌐 模型 / API | 见上面 [🌐 接入第三方模型](#-接入第三方模型) |
 | **聊天面板配色** | `.chat_state/theme` + `web/app.css` | 双主题:WARM(暖白) / GLASS(暗) |
 
 ---

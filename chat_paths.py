@@ -29,6 +29,7 @@ PROXY_FILE = STATE_DIR / "proxy"
 PERMISSION_MODE_FILE = STATE_DIR / "permission_mode"
 HOOK_SETTINGS_FILE = STATE_DIR / "hook_settings.json"
 THEME_FILE = STATE_DIR / "theme"   # 内容 "dark" / "light", 兼容老 ThemeManager
+ENV_FILE = STATE_DIR / "env.json"  # 用户自定义 env 注入 (ANTHROPIC_BASE_URL 等)
 
 CLAUDE_BIN = shutil.which("claude") or "claude"
 DEFAULT_CWD = str(ROOT)
@@ -112,6 +113,37 @@ def save_dark(dark: bool):
         THEME_FILE.write_text("dark" if dark else "light", encoding="utf-8")
     except Exception:
         pass
+
+
+# ---------------- 用户自定义 env 注入 (第三方模型接入) ----------------
+# .chat_state/env.json 平铺 string→string. 典型用法:
+#   {
+#     "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+#     "ANTHROPIC_AUTH_TOKEN": "sk-xxx",
+#     "ANTHROPIC_MODEL": "deepseek-chat"
+#   }
+# value 为 null 或空串 → 表示从 env_extra 删除该 key (用于禁用代理: "HTTPS_PROXY": "")
+def load_env_extra() -> dict:
+    """读取 .chat_state/env.json 返回 {key: value-or-None}.
+    None 是"删除该 key"的标记, 合并方负责处理.
+    """
+    if not ENV_FILE.exists():
+        return {}
+    try:
+        data = json.loads(ENV_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}
+        out: dict = {}
+        for k, v in data.items():
+            if not isinstance(k, str):
+                continue
+            if v is None or v == "":
+                out[k] = None        # 标记删除
+            else:
+                out[k] = str(v)
+        return out
+    except Exception:
+        return {}
 
 
 # ---------------- hook settings 自举 ----------------

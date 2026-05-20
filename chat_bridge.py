@@ -30,6 +30,7 @@ from chat_paths import (
     MODEL_OPTIONS, MODEL_KEYS, PERMISSION_MODES,
     load_permission_mode, save_permission_mode,
     load_dark, save_dark,
+    load_env_extra,
 )
 from mcp_manager import build_effective_mcp_file
 
@@ -414,6 +415,21 @@ class ChatBridge(QObject):
             env_extra["HTTPS_PROXY"] = proxy
             env_extra["http_proxy"] = proxy
             env_extra["https_proxy"] = proxy
+        # 用户 .chat_state/env.json 注入 (第三方模型: ANTHROPIC_BASE_URL/TOKEN/MODEL).
+        # value=None 表示从 env_extra 删除该 key (典型用途: 走国内网关时清掉 proxy).
+        try:
+            user_env = load_env_extra()
+        except Exception:
+            user_env = {}
+        for k, v in user_env.items():
+            if v is None:
+                env_extra.pop(k, None)
+                # HTTPS_PROXY 同时也清小写, 避免漏一个
+                if k.upper() in ("HTTP_PROXY", "HTTPS_PROXY"):
+                    env_extra.pop(k.lower(), None)
+                    env_extra.pop(k.upper(), None)
+            else:
+                env_extra[k] = v
         return env_extra
 
     # ---------- 模型存储: 每会话 conv_dir/<key>/model 一个文本文件 -----------
