@@ -31,7 +31,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLabel,
-    QSizePolicy,
+    QSizePolicy, QDialog,
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
@@ -412,37 +412,135 @@ class ChatWebWindow(QMainWindow):
     # ----- permission routing (主进程内统一弹原生 dialog) -----
 
     def _on_perm_request(self, conv_key: str, payload: dict, responder):
-        """收到 hook 子进程的权限请求 — 弹原生 PyQt dialog 让用户决定."""
-        # 1. 给那条对话挂 permission badge (sidebar 红点) → JS 会收到 conversations_changed
+        """收到 hook 子进程的权限请求 — 异步弹 dialog 让用户决定.
+
+        以前复用 permission_dialog.show_dialog 同步 exec, dialog 没 parent +
+        嵌套 modal event loop, 在 WebEngine frameless 主窗口下 z-order 飘 +
+        Win11 前台抢占限制, 用户看不到框, hook 端 60s timeout 才降级
+        (permission.log 里 'timeout waiting decision'). 改成 QDialog(self) +
+        异步 show, 不阻塞 event loop, 跟主窗口绑 parent.
+        """
         try:
             self.store.set_badge(conv_key, "permission")
         except Exception:
             pass
-        # 2. 把窗口拉前台, 避免弹框出现在背景里被忽略
         try:
             self.show()
             self.raise_()
             self.activateWindow()
         except Exception:
             pass
-        # 3. 弹原生 dialog (复用 permission_dialog.show_dialog)
-        try:
-            from permission_dialog import show_dialog
-        except Exception:
-            responder("deny")
-            self._clear_perm_badge(conv_key)
-            return
         tool_name = payload.get("tool_name", "?")
         tool_input = payload.get("tool_input", {}) or {}
         cwd = payload.get("cwd", "") or ""
         try:
-            allowed = show_dialog(tool_name, tool_input, cwd)
+            self._spawn_perm_dialog(conv_key, tool_name, tool_input, cwd, responder)
         except Exception:
             responder("deny")
             self._clear_perm_badge(conv_key)
-            return
-        responder("allow" if allowed else "deny")
-        self._clear_perm_badge(conv_key)
+
+    def _spawn_perm_dialog(self, conv_key: str, tool_name: str,
+                           tool_input: dict, cwd: str, responder):
+        """构造非模态 dialog (parent=self), 按钮触发 responder + 清 badge.
+
+        点 [允许]/[拒绝]/[×]/ESC 都走 dlg.finished, responder 只触发一次.
+        """
+        from permission_dialog import format_input
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Claude 权限请求")
+        dlg.setMinimumWidth(520)
+        dlg.setWindowFlags(
+            Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint
+        )
+        icon_path = Path(__file__).parent / "foamo.ico"
+        if icon_path.exists():
+            dlg.setWindowIcon(QIcon(str(icon_path)))
+
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(20, 16, 20, 16)
+        v.setSpacing(10)
+
+        title = QLabel(
+            f"<h3 style='margin:0;'>⚠ Claude 想使用 "
+            f"<code style='color:#c7254e;'>{tool_name}</code></h3>"
+        )
+        title.setTextFormat(Qt.TextFormat.RichText)
+        v.addWidget(title)
+
+        if cwd:
+            cwd_l = QLabel(
+                f"<span style='color:#888;font-size:11px;'>"
+                f"项目目录: {cwd}</span>"
+            )
+            cwd_l.setTextFormat(Qt.TextFormat.RichText)
+            v.addWidget(cwd_l)
+
+        body = QLabel(format_input(tool_name, tool_input))
+        body.setTextFormat(Qt.TextFormat.RichText)
+        body.setWordWrap(True)
+        body.setStyleSheet(
+            "background: #f6f8fa; padding: 12px; border-radius: 5px; "
+            "font-family: Consolas, Menlo, monospace; font-size: 12px; "
+            "color: #2c2c2c;"
+        )
+        body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        v.addWidget(body)
+
+        hint = QLabel(
+            "<span style='color:#888;font-size:10px;'>"
+            "想全部跳过这种弹窗?把聊天框头部权限切到 "
+            "<b>全放行</b> 即可</span>"
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        v.addWidget(hint)
+
+        btns = QHBoxLayout()
+        btns.addStretch(1)
+
+        deny_btn = QPushButton("拒绝")
+        deny_btn.setShortcut("Esc")
+        deny_btn.setStyleSheet(
+            "padding: 6px 16px; border-radius: 4px; "
+            "border: 1px solid #d9d9d9; background: white; font-size: 12px;"
+        )
+        deny_btn.clicked.connect(lambda: dlg.done(0))
+        btns.addWidget(deny_btn)
+
+        allow_btn = QPushButton("允许")
+        allow_btn.setDefault(True)
+        allow_btn.setStyleSheet(
+            "background: #07c160; color: white; padding: 6px 18px; "
+            "border-radius: 4px; border: 0; font-size: 12px; font-weight: bold;"
+        )
+        allow_btn.clicked.connect(lambda: dlg.done(1))
+        btns.addWidget(allow_btn)
+
+        v.addLayout(btns)
+
+        # finished 在 done()/accept()/reject()/close() 都触发, 且只触发一次 —
+        # responder 天然单次. code==1 才是 allow, 其余 (按钮拒绝 / [×] / ESC) 都 deny.
+        def on_finished(code: int):
+            decision = "allow" if code == 1 else "deny"
+            try:
+                responder(decision)
+            except Exception:
+                pass
+            self._clear_perm_badge(conv_key)
+            dlg.deleteLater()
+        dlg.finished.connect(on_finished)
+
+        # 居中到屏幕, 跟主窗口走 z-order 但视觉上居中显眼
+        from PyQt6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen().availableGeometry()
+        dlg.adjustSize()
+        dlg.move(
+            screen.center().x() - dlg.width() // 2,
+            screen.center().y() - dlg.height() // 2,
+        )
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
 
     def _clear_perm_badge(self, conv_key: str):
         try:
