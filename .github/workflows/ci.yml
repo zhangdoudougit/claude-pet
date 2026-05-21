@@ -60,11 +60,19 @@ jobs:
       - name: import 各模块 (无 GUI display)
         env:
           QT_QPA_PLATFORM: offscreen
+        # 注意 chat_web_window 不在 import 烟测里:
+        # 它 import PyQt6.QtWebEngineWidgets, 在 headless Linux 上要再装一整套
+        # Chromium 系统库 (libnss3 libnspr4 libgbm1 libxkbcommon0 libpango1
+        # libcairo2 libasound2 ...), 装齐了 CI 会很沉. 语法上 py_compile job
+        # 已经覆盖, 真实 import 由桌面环境验证.
         run: |
-          python -c "import context, journal"
-          python -c "from chat_paths import _resolve_proxy, load_permission_mode; print('chat_paths OK')"
+          python -c "import context, journal; print('context/journal OK')"
+          python -c "from chat_paths import _resolve_proxy, load_permission_mode, load_env_extra, load_dark; print('chat_paths OK')"
+          python -c "import conversation_store; print('conversation_store OK')"
+          python -c "import claude_worker; print('claude_worker OK')"
+          python -c "import permission_router; print('permission_router OK')"
+          python -c "import permission_dialog; print('permission_dialog OK')"
+          python -c "import mcp_manager; print('mcp_manager OK')"
           python -c "import chat_bridge; print('chat_bridge OK')"
-          python -c "import chat_web_window; print('chat_web_window OK')"
           python -c "import add_project_dialog; print('add_project_dialog OK')"
           python -c "import settings_dialog; print('settings_dialog OK')"
-          python -c "import permission_dialog; print('permission_dialog OK')"
