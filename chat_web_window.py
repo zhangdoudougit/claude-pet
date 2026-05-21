@@ -353,6 +353,53 @@ class ChatWebWindow(QMainWindow):
         super().showEvent(e)
         self._apply_rounded_mask()
         self._enable_mica()
+        # 首次显示做环境健康检查 (claude 在 PATH? env.json 配齐?), 都没就弹引导
+        if not getattr(self, "_first_show_done", False):
+            self._first_show_done = True
+            from PyQt6.QtCore import QTimer
+            # 等 webview 加载渲染稳定再弹 dialog, 不然 z-order 容易飘
+            QTimer.singleShot(600, self._first_run_health_check)
+
+    def _first_run_health_check(self):
+        """没有任何聊天方式可用时, 弹一次性引导对话框. 已配过就静默."""
+        import shutil
+        from chat_paths import load_env_extra
+
+        has_claude = shutil.which("claude") is not None
+        env = load_env_extra() or {}
+        # 第三方模型至少需要 base url + token 才算配齐
+        has_third_party = bool(env.get("ANTHROPIC_BASE_URL")) and bool(env.get("ANTHROPIC_AUTH_TOKEN"))
+        if has_claude or has_third_party:
+            return  # 至少一条路通了, 不打扰
+
+        from PyQt6.QtWidgets import QMessageBox
+        msg = QMessageBox(self)
+        msg.setWindowTitle("欢迎 · Claude Pet 首次启动")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText("<b>差一步就能聊天 — 选一条路</b>")
+        msg.setInformativeText(
+            "检测到本机:\n"
+            "  • Claude CLI: <span style='color:#c44'>没找到</span>\n"
+            "  • 第三方模型: <span style='color:#c44'>没配</span>\n\n"
+            "国内推荐走第三方模型 (DeepSeek / 智谱 / Kimi),"
+            "不用 Anthropic 账号、不用代理。"
+        )
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        btn_third = msg.addButton(
+            "🌐 接国内模型 (推荐)", QMessageBox.ButtonRole.AcceptRole)
+        btn_official = msg.addButton(
+            "📦 装 Anthropic 官方 CLI", QMessageBox.ButtonRole.AcceptRole)
+        btn_skip = msg.addButton(
+            "暂时跳过", QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(btn_third)
+        msg.exec()
+        clicked = msg.clickedButton()
+        if clicked == btn_third:
+            self.open_settings_dialog(initial_tab="env")
+        elif clicked == btn_official:
+            import webbrowser
+            webbrowser.open("https://docs.claude.com/en/docs/claude-code/quickstart")
+        # btn_skip / 关闭: 啥也不做, 用户可以自己探索
 
     # ----- bridge callbacks (供 ChatBridge 反向调用) -----
 
@@ -399,14 +446,15 @@ class ChatWebWindow(QMainWindow):
         elif clicked == purge_btn:
             self.store.delete_project(key, purge_history=True)
 
-    def open_settings_dialog(self):
+    def open_settings_dialog(self, initial_tab=None):
+        """initial_tab: 透传给 SettingsDialog, 用于 "从首启引导直跳到模型/API"."""
         try:
             from settings_dialog import SettingsDialog
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "设置加载失败", str(e))
             return
-        dlg = SettingsDialog(self)
+        dlg = SettingsDialog(self, initial_tab=initial_tab)
         dlg.exec()
 
     # ----- permission routing (主进程内统一弹原生 dialog) -----

@@ -87,9 +87,15 @@ def _open_in_explorer(path: Path):
 
 
 class SettingsDialog(QDialog):
-    """聊天框的设置入口 — Tab: MCP / 钩子 / 工作目录"""
+    """聊天框的设置入口 — Tab: MCP / 钩子 / 模型 / 工作目录.
 
-    def __init__(self, parent=None):
+    initial_tab: 默认 None (跳到第 0 个 MCP). 可传字符串别名 (mcp/hooks/env/dirs)
+    或 int 索引, 用于"从首启引导直跳到模型/API"等场景.
+    """
+
+    TAB_ALIASES = {"mcp": 0, "hooks": 1, "env": 2, "dirs": 3}
+
+    def __init__(self, parent=None, initial_tab=None):
         super().__init__(parent)
         self.setWindowTitle("泡沫 · 设置")
         self.setMinimumSize(560, 420)
@@ -104,6 +110,14 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(self._build_env_tab(), "🌐 模型 / API")
         self.tabs.addTab(self._build_dirs_tab(), "📁 工作目录")
         v.addWidget(self.tabs, 1)
+
+        if initial_tab is not None:
+            if isinstance(initial_tab, str):
+                idx = self.TAB_ALIASES.get(initial_tab, 0)
+            else:
+                idx = int(initial_tab)
+            if 0 <= idx < self.tabs.count():
+                self.tabs.setCurrentIndex(idx)
 
         # 底部关闭
         bar = QHBoxLayout()

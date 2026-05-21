@@ -378,9 +378,54 @@ class ChatBridge(QObject):
             pass
 
     def _on_error(self, key: str, msg: str):
-        self.error_occurred.emit(key, msg)
+        self.error_occurred.emit(key, self._translate_error(msg))
         self.store.set_badge(key, "none")
         self.status_changed.emit(key, "idle")
+
+    @staticmethod
+    def _translate_error(msg: str) -> str:
+        """把 claude / QProcess 的英文错误翻成对小白友好的中文提示 + 修复路径.
+        命中关键词就附加引导, 原 msg 保留在末尾方便老司机排错.
+        """
+        if not msg:
+            return msg
+        low = msg.lower()
+        # 1. claude CLI 不在 PATH (Windows: cannot find / Linux: ENOENT / No such file)
+        if ("cannot find" in low or "no such file" in low or
+                "enoent" in low or "failedtostart" in low.replace(" ", "")):
+            return (
+                "❌ Claude CLI 没装或不在 PATH。\n\n"
+                "→ 装一下: https://docs.claude.com/en/docs/claude-code/quickstart\n"
+                "→ 装完重启终端再启动 foamo (PATH 才会刷新)\n"
+                "→ 不想装官方? 设置 → 🌐 模型 / API 接 DeepSeek/GLM/Kimi 也行\n\n"
+                f"原文: {msg}"
+            )
+        # 2. 鉴权失败
+        if "401" in msg or "unauthorized" in low or "invalid api key" in low:
+            return (
+                "❌ Claude 没登录或 token 失效。\n\n"
+                "→ 终端跑: claude /login\n"
+                "→ 或在 设置 → 🌐 模型 / API 配第三方模型 (国内推荐)\n\n"
+                f"原文: {msg}"
+            )
+        # 3. 网络层不通 (国内访问 anthropic 经典症状)
+        if ("403" in msg or "forbidden" in low or "timed out" in low or
+                "timeout" in low or "connection refused" in low or
+                "could not resolve" in low or "name or service not known" in low):
+            return (
+                "❌ 连不上 API。\n\n"
+                "→ 国内用户: 在项目根写 .chat_state/proxy 一行代理 URL (如 http://127.0.0.1:7897)\n"
+                "→ 或在 设置 → 🌐 模型 / API 接国内网关 (DeepSeek/GLM/Kimi)\n\n"
+                f"原文: {msg}"
+            )
+        # 4. 配额 / 速率
+        if "429" in msg or "rate limit" in low or "quota" in low:
+            return (
+                "❌ 触发限流或配额耗尽。\n\n"
+                "→ 等几分钟再试, 或换模型 (顶栏模型下拉)\n\n"
+                f"原文: {msg}"
+            )
+        return msg
 
     def _on_finished(self, key: str):
         full = self._stream_buf.get(key, "")
