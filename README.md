@@ -474,12 +474,32 @@ flowchart LR
 
 ## 🚀 Quick Start
 
+### ⚡ 零账号最小路径(国内推荐)
+
+> 没有 Anthropic 账号 / 嫌折腾代理?这是最短路径,**5 分钟跑起来,不用注册 Anthropic**。
+
+1. **clone + 装依赖**
+   ```bash
+   git clone https://github.com/zhangdoudougit/claude-pet.git
+   cd claude-pet
+   pip install -r requirements.txt    # 自动装 PyQt6 + WebEngine
+   ```
+2. **装 Claude Code CLI**(只装,**不用** `claude /login`)。装完 `claude --version` 能跑就行 → [官方 quickstart](https://docs.claude.com/en/docs/claude-code/quickstart)
+3. `python claude_pet.py` → 桌面冒出泡沫 → 双击呼出聊天框
+4. **首次启动会弹引导**,选 **「🌐 接国内模型(推荐)」**
+5. 自动跳到 Settings → 🌐 模型 / API → **「插入示例 ▾」** 选 DeepSeek(或 GLM / Kimi)
+6. 把模板里的 `sk-你的-xxx-key` 改成真 token → **「保存」** → 直接发消息
+
+> 没 DeepSeek token?[platform.deepseek.com](https://platform.deepseek.com) 注册,新号有免费额度,够你玩好几天。
+
+---
+
 ### Windows
 
 ```bash
 git clone https://github.com/zhangdoudougit/claude-pet.git
 cd claude-pet
-start.bat            # 首次自动 pip install PyQt6
+start.bat            # 首次自动 pip install PyQt6 + WebEngine
 ```
 
 不想看 cmd 黑窗:`start_silent.bat`(开机自启可以用这个)。

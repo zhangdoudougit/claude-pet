@@ -152,6 +152,19 @@ class ChatBridge(QObject):
                 images = []
         if not text.strip() and not images:
             return
+        # 启 worker 前主动检查 claude 二进制可用 — 拦住"跳过首启引导后还是想试"的情况,
+        # 给中文提示, 而不是让 QProcess 暴出 "The system cannot find the file specified".
+        import shutil
+        if shutil.which("claude") is None:
+            self.error_occurred.emit(key, (
+                "❌ Claude CLI 没装或不在 PATH。\n\n"
+                "→ 装一下: https://docs.claude.com/en/docs/claude-code/quickstart\n"
+                "→ 装完重启终端再启动 foamo (PATH 才会刷新)\n\n"
+                "提示: 即使用第三方模型 (DeepSeek / GLM / Kimi), 也要先装 claude CLI —— "
+                "它就是个客户端, 只是把请求发到 ANTHROPIC_BASE_URL 指定的网关。"
+            ))
+            self.store.set_badge(key, "none")
+            return
         worker = self._ensure_worker(key)
         # 写历史 (user). 文本里把图片路径附在末尾, 让历史也看得到
         history_text = text
